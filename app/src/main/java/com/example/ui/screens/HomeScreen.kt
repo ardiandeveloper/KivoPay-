@@ -155,11 +155,11 @@ fun HomeScreen(
                 onTransferClick = onNavigateTransfer,
                 onWithdrawClick = onNavigateWithdraw,
                 onHistoryClick = onNavigateHistory,
-                onCopyAccount = { accNo ->
+                onCopyAccount = { phoneId ->
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("No Rekening KivoPay", accNo)
+                    val clip = ClipData.newPlainText("ID KivoPay", phoneId)
                     clipboard.setPrimaryClip(clip)
-                    onShowToast("Nomor Akun $accNo tersalin!")
+                    onShowToast("ID KivoPay $phoneId tersalin!")
                 }
             )
         }
@@ -532,19 +532,20 @@ fun KivoBalanceCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
+                        val userPhoneId = user?.phoneNumber?.ifBlank { "081298765432" } ?: "081298765432"
                         Text(
-                            text = "No. Akun: ${user?.accountId ?: "1089283741"}",
+                            text = "ID KivoPay: $userPhoneId",
                             color = CleanWhite.copy(alpha = 0.9f),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Salin Nomor Akun",
+                            contentDescription = "Salin ID KivoPay",
                             tint = CleanWhite,
                             modifier = Modifier
                                 .size(14.dp)
-                                .clickable { onCopyAccount(user?.accountId ?: "1089283741") }
+                                .clickable { onCopyAccount(userPhoneId) }
                         )
                     }
 

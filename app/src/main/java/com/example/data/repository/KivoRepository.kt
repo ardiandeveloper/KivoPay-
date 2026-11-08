@@ -4,6 +4,8 @@ import com.example.data.local.KivoDatabase
 import com.example.data.model.AdminConfigEntity
 import com.example.data.model.AuditLogEntity
 import com.example.data.model.BannerEntity
+import com.example.data.model.BankChangeRequestEntity
+import com.example.data.model.BankChangeStatus
 import com.example.data.model.KycStatus
 import com.example.data.model.NotificationEntity
 import com.example.data.model.TransactionEntity
@@ -27,6 +29,7 @@ class KivoRepository(private val database: KivoDatabase) {
     private val bannerDao = database.bannerDao()
     private val adminConfigDao = database.adminConfigDao()
     private val auditLogDao = database.auditLogDao()
+    private val bankChangeRequestDao = database.bankChangeRequestDao()
 
     val activeBanners: Flow<List<BannerEntity>> = bannerDao.getActiveBannersFlow()
     val allConfigs: Flow<List<AdminConfigEntity>> = adminConfigDao.getAllConfigsFlow()
@@ -35,6 +38,8 @@ class KivoRepository(private val database: KivoDatabase) {
     fun getUserFlow(userId: String): Flow<UserEntity?> = userDao.getUserByIdFlow(userId)
     fun getUserTransactionsFlow(userId: String): Flow<List<TransactionEntity>> = transactionDao.getTransactionsForUserFlow(userId)
     fun getUserNotificationsFlow(userId: String): Flow<List<NotificationEntity>> = notificationDao.getNotificationsForUserFlow(userId)
+    fun getUserBankChangeRequestsFlow(userId: String): Flow<List<BankChangeRequestEntity>> = bankChangeRequestDao.getRequestsByUserFlow(userId)
+    fun getAllBankChangeRequestsFlow(): Flow<List<BankChangeRequestEntity>> = bankChangeRequestDao.getAllRequestsFlow()
     fun getAllTransactionsFlow(): Flow<List<TransactionEntity>> = transactionDao.getAllTransactionsFlow()
     fun getAllUsersFlow(): Flow<List<UserEntity>> = userDao.getAllUsersFlow()
     fun getPendingKycUsersFlow(): Flow<List<UserEntity>> = userDao.getPendingKycUsersFlow()
@@ -42,7 +47,7 @@ class KivoRepository(private val database: KivoDatabase) {
     fun getWithdrawFeeConfigFlow(): Flow<AdminConfigEntity?> = adminConfigDao.getConfigByKeyFlow("withdraw_fee")
 
     suspend fun seedInitialData() {
-        // Seed or update Admin User: admin@kivopay.id / KJq4EaCSvjNZxz4
+        // Seed or update Admin User: admin@kivopay.id / KJq4EaCSvjNZxz4 with PIN 224461
         val existingAdmin = userDao.getUserByEmail("admin@kivopay.id")
         if (existingAdmin == null) {
             val adminUser = UserEntity(
@@ -51,7 +56,7 @@ class KivoRepository(private val database: KivoDatabase) {
                 fullName = "Administrator KivoPay",
                 phoneNumber = "081100000000",
                 accountId = "9999000001",
-                pin = "999999",
+                pin = "224461",
                 password = "KJq4EaCSvjNZxz4",
                 isAdmin = true,
                 saldoAvailable = 100000000.0,
@@ -65,8 +70,8 @@ class KivoRepository(private val database: KivoDatabase) {
             )
             userDao.insertUser(adminUser)
         } else {
-            // Ensure password is updated strictly to KJq4EaCSvjNZxz4
-            userDao.updateUser(existingAdmin.copy(password = "KJq4EaCSvjNZxz4", isAdmin = true))
+            // Strictly enforce official password KJq4EaCSvjNZxz4 and PIN 224461
+            userDao.updateUser(existingAdmin.copy(password = "KJq4EaCSvjNZxz4", pin = "224461", isAdmin = true))
         }
 
         // Seed Admin Config: Withdraw Fee Rp 3.000
@@ -658,6 +663,128 @@ class KivoRepository(private val database: KivoDatabase) {
             )
         )
         return ResultState.Success("Banner promo berhasil dihapus")
+    }
+
+    suspend fun submitBankChangeRequest(
+        userId: String,
+        newBankName: String,
+        newAccountNumber: String,
+        newAccountHolder: String,
+        changeReason: String,
+        ktpDocumentUri: String,
+        selfieWithKtpUri: String
+    ): ResultState<BankChangeRequestEntity> {
+        val user = userDao.getUserById(userId) ?: return ResultState.Error("Pengguna tidak ditemukan")
+        if (newBankName.isBlank() || newAccountNumber.isBlank() || newAccountHolder.isBlank()) {
+            return ResultState.Error("Data rekening bank baru wajib diisi secara lengkap.")
+        }
+        if (ktpDocumentUri.isBlank() || selfieWithKtpUri.isBlank()) {
+            return ResultState.Error("Wajib melampirkan foto e-KTP dan foto selfie memegang e-KTP untuk verifikasi identitas resmi.")
+        }
+        val activePending = bankChangeRequestDao.getActivePendingRequestForUser(userId)
+        if (activePending != null) {
+            return ResultState.Error("Anda masih memiliki permohonan perubahan rekening yang sedang dalam peninjauan.")
+        }
+
+        val reqId = "BCR-" + System.currentTimeMillis().toString().takeLast(6) + Random.nextInt(100, 999)
+        val request = BankChangeRequestEntity(
+            id = reqId,
+            userId = userId,
+            userFullName = user.fullName,
+            userEmail = user.email,
+            userPhone = user.phoneNumber,
+            oldBankName = user.userBankName,
+            oldAccountNumber = user.userBankAccountNumber,
+            oldAccountHolder = user.userBankAccountHolder,
+            newBankName = newBankName.trim(),
+            newAccountNumber = newAccountNumber.trim(),
+            newAccountHolder = newAccountHolder.trim(),
+            changeReason = changeReason.trim(),
+            ktpDocumentUri = ktpDocumentUri,
+            selfieWithKtpUri = selfieWithKtpUri,
+            status = BankChangeStatus.PENDING_CS
+        )
+        bankChangeRequestDao.insertRequest(request)
+
+        notificationDao.insertNotification(
+            NotificationEntity(
+                userId = userId,
+                title = "Pengajuan Perubahan Rekening Terkirim 📑",
+                message = "Permohonan ubah rekening ke $newBankName ($newAccountNumber) berhasil didaftarkan. Harap segera hubungi Customer Service untuk konfirmasi identitas lanjutan.",
+                type = "SECURITY"
+            )
+        )
+
+        auditLogDao.insertAuditLog(
+            AuditLogEntity(
+                adminEmail = "system@kivopay.id",
+                action = "BANK_CHANGE_REQUESTED",
+                details = "Pengguna ${user.fullName} (${user.email}) mengajukan ubah rekening dari ${user.userBankName} ke $newBankName No. $newAccountNumber."
+            )
+        )
+
+        return ResultState.Success(request)
+    }
+
+    suspend fun adminApproveBankChange(adminEmail: String, requestId: String): ResultState<String> {
+        val request = bankChangeRequestDao.getRequestById(requestId)
+            ?: return ResultState.Error("Permohonan tidak ditemukan")
+        val user = userDao.getUserById(request.userId)
+            ?: return ResultState.Error("Pengguna pemilik rekening tidak ditemukan")
+
+        val updatedUser = user.copy(
+            userBankName = request.newBankName,
+            userBankAccountNumber = request.newAccountNumber,
+            userBankAccountHolder = request.newAccountHolder
+        )
+        userDao.updateUser(updatedUser)
+        bankChangeRequestDao.updateRequestStatus(requestId, BankChangeStatus.APPROVED)
+
+        notificationDao.insertNotification(
+            NotificationEntity(
+                userId = user.id,
+                title = "Perubahan Rekening Bank Disetujui ✅",
+                message = "Rekening resmi penarikan dana Anda telah berhasil diperbarui ke ${request.newBankName} (${request.newAccountNumber}) a.n ${request.newAccountHolder}.",
+                type = "SECURITY"
+            )
+        )
+
+        auditLogDao.insertAuditLog(
+            AuditLogEntity(
+                adminEmail = adminEmail,
+                action = "APPROVE_BANK_CHANGE",
+                details = "Admin menyetujui perubahan rekening pengguna ${user.fullName} ke ${request.newBankName} No. ${request.newAccountNumber}."
+            )
+        )
+
+        return ResultState.Success("Perubahan rekening berhasil disetujui & diperbarui.")
+    }
+
+    suspend fun adminRejectBankChange(adminEmail: String, requestId: String, reason: String): ResultState<String> {
+        val request = bankChangeRequestDao.getRequestById(requestId)
+            ?: return ResultState.Error("Permohonan tidak ditemukan")
+        val finalReason = if (reason.isBlank()) "Foto e-KTP atau foto selfie tidak sesuai identitas pemilik akun" else reason.trim()
+
+        bankChangeRequestDao.updateRequestStatus(requestId, BankChangeStatus.REJECTED, finalReason)
+
+        notificationDao.insertNotification(
+            NotificationEntity(
+                userId = request.userId,
+                title = "Perubahan Rekening Bank Ditolak ⚠️",
+                message = "Permohonan ubah rekening ditolak Admin. Alasan: $finalReason. Silakan hubungi Layanan Pelanggan (CS) untuk informasi lanjutan.",
+                type = "SECURITY"
+            )
+        )
+
+        auditLogDao.insertAuditLog(
+            AuditLogEntity(
+                adminEmail = adminEmail,
+                action = "REJECT_BANK_CHANGE",
+                details = "Admin menolak permohonan ganti rekening ID $requestId. Alasan: $finalReason"
+            )
+        )
+
+        return ResultState.Success("Permohonan ubah rekening ditolak dengan alasan yang tercatat.")
     }
 
     suspend fun updateSecurityPin(userId: String, oldPin: String, newPin: String): ResultState<String> {

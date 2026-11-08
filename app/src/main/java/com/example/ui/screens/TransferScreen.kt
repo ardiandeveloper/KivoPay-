@@ -23,6 +23,8 @@ import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -35,7 +37,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -55,10 +56,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.IndonesianBanks
 import com.example.ui.components.PinInputDialog
+import com.example.ui.components.kivoBigAmountTextStyle
+import com.example.ui.components.kivoInputTextStyle
+import com.example.ui.components.kivoTextFieldColors
+import com.example.ui.theme.CardBorderColor
+import com.example.ui.theme.CleanWhite
 import com.example.ui.theme.EmeraldSuccess
-import com.example.ui.theme.NavyBluePrimary
-import com.example.ui.theme.RoyalBlueAccent
+import com.example.ui.theme.PageBackground
+import com.example.ui.theme.PrimaryBlue
+import com.example.ui.theme.PrimaryBlueDark
+import com.example.ui.theme.SoftBlueBg
+import com.example.ui.theme.TextPrimaryDark
 import com.example.ui.theme.TextSecondaryMuted
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,19 +78,23 @@ fun TransferScreen(
     onBack: () -> Unit,
     onExecuteTransfer: (destination: String, bankName: String, amount: Double, notes: String, pin: String) -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(0) } // 0: Sesama KivoPay, 1: Bank Lain
-    var destinationInput by remember { mutableStateOf("1089283741") }
-    var recipientNameLookup by remember { mutableStateOf("Siti Rahma (KivoPay User)") }
-    var selectedBank by remember { mutableStateOf("Bank BCA") }
+    var selectedTab by remember { mutableStateOf(0) } // 0: Sesama KivoPay (ID HP), 1: Bank Lain
+    var destinationInput by remember { mutableStateOf("081298765432") }
+    var recipientNameLookup by remember { mutableStateOf("Siti Rahma (Pengguna KivoPay)") }
+    var selectedBank by remember { mutableStateOf("Bank Central Asia (BCA)") }
+    var bankSearchQuery by remember { mutableStateOf("") }
     var bankExpanded by remember { mutableStateOf(false) }
     var amountInput by remember { mutableStateOf("50000") }
     var notesInput by remember { mutableStateOf("") }
     var showPinSheet by remember { mutableStateOf(false) }
 
-    val bankOptions = listOf(
-        "Bank BCA", "Bank Mandiri", "Bank BNI", "Bank BRI",
-        "Bank CIMB Niaga", "Bank Permata", "Bank Danamon", "Bank BSI"
-    )
+    val filteredBanks = remember(bankSearchQuery) {
+        if (bankSearchQuery.isBlank()) {
+            IndonesianBanks.allBanks
+        } else {
+            IndonesianBanks.allBanks.filter { it.contains(bankSearchQuery, ignoreCase = true) }
+        }
+    }
 
     val amountDouble = amountInput.toDoubleOrNull() ?: 0.0
     val bankName = if (selectedTab == 0) "KivoPay" else selectedBank
@@ -93,17 +107,18 @@ fun TransferScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Transfer Uang",
+                        text = "Transfer Saldo",
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+                        fontSize = 18.sp,
+                        color = TextPrimaryDark
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Kembali")
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Kembali", tint = TextPrimaryDark)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = CleanWhite)
             )
         }
     ) { padding ->
@@ -111,42 +126,45 @@ fun TransferScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .background(PageBackground)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
             // Tab Switcher: Sesama KivoPay vs Antar Bank
             TabRow(
                 selectedTabIndex = selectedTab,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = RoyalBlueAccent
+                containerColor = CleanWhite,
+                contentColor = PrimaryBlue
             ) {
                 Tab(
                     selected = selectedTab == 0,
                     onClick = {
                         selectedTab = 0
-                        recipientNameLookup = "Siti Rahma (KivoPay User)"
+                        destinationInput = "081298765432"
+                        recipientNameLookup = "Siti Rahma (Pengguna KivoPay)"
                     },
-                    text = { Text("Sesama KivoPay (Free)", fontWeight = FontWeight.Bold) }
+                    text = { Text("Sesama KivoPay (Gratis)", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = {
                         selectedTab = 1
-                        recipientNameLookup = "Verified Recipient"
+                        destinationInput = "5271829102"
+                        recipientNameLookup = "PT Mitra Rekening Penerima"
                     },
-                    text = { Text("Ke Bank Lain", fontWeight = FontWeight.Bold) }
+                    text = { Text("Ke Bank Lain", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
                 )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             if (selectedTab == 1) {
-                // Bank Selector Dropdown
+                // Bank Selector Dropdown from all Indonesian Banks
                 Text(
-                    text = "Pilih Bank Tujuan",
+                    text = "Pilih Bank Tujuan Transfer",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = TextPrimaryDark
                 )
                 Spacer(modifier = Modifier.height(6.dp))
 
@@ -158,9 +176,10 @@ fun TransferScreen(
                         value = selectedBank,
                         onValueChange = {},
                         readOnly = true,
-                        textStyle = com.example.ui.components.kivoInputTextStyle(),
-                        colors = com.example.ui.components.kivoTextFieldColors(),
+                        textStyle = kivoInputTextStyle(),
+                        colors = kivoTextFieldColors(),
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = bankExpanded) },
+                        leadingIcon = { Icon(Icons.Default.AccountBalance, contentDescription = null, tint = PrimaryBlue) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .menuAnchor(),
@@ -168,11 +187,25 @@ fun TransferScreen(
                     )
                     ExposedDropdownMenu(
                         expanded = bankExpanded,
-                        onDismissRequest = { bankExpanded = false }
+                        onDismissRequest = { bankExpanded = false },
+                        modifier = Modifier.height(280.dp)
                     ) {
-                        bankOptions.forEach { bank ->
+                        OutlinedTextField(
+                            value = bankSearchQuery,
+                            onValueChange = { bankSearchQuery = it },
+                            placeholder = { Text("Cari nama bank di Indonesia...") },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = PrimaryBlue) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp),
+                            singleLine = true,
+                            textStyle = kivoInputTextStyle(),
+                            colors = kivoTextFieldColors()
+                        )
+
+                        filteredBanks.take(50).forEach { bank ->
                             DropdownMenuItem(
-                                text = { Text(bank, color = com.example.ui.theme.TextPrimaryDark, fontWeight = FontWeight.SemiBold) },
+                                text = { Text(bank, color = TextPrimaryDark, fontSize = 13.sp) },
                                 onClick = {
                                     selectedBank = bank
                                     bankExpanded = false
@@ -184,21 +217,30 @@ fun TransferScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Recipient Account Input
+            // Recipient Account Input - Explicitly ID KivoPay (Nomor Handphone) for e-wallet
             Text(
-                text = if (selectedTab == 0) "No. Rekening / HP KivoPay Tujuan" else "Nomor Rekening Bank Tujuan",
+                text = if (selectedTab == 0) "ID KivoPay (Nomor Handphone Penerima)" else "Nomor Rekening Bank Tujuan",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = com.example.ui.theme.TextPrimaryDark
+                color = TextPrimaryDark
             )
             Spacer(modifier = Modifier.height(6.dp))
 
             OutlinedTextField(
                 value = destinationInput,
-                onValueChange = { destinationInput = it },
-                textStyle = com.example.ui.components.kivoInputTextStyle(),
-                colors = com.example.ui.components.kivoTextFieldColors(),
-                leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Penerima", tint = RoyalBlueAccent) },
+                onValueChange = { input -> if (input.all { it.isDigit() }) destinationInput = input },
+                textStyle = kivoInputTextStyle(),
+                colors = kivoTextFieldColors(),
+                placeholder = {
+                    Text(if (selectedTab == 0) "Contoh: 081234567890" else "Contoh: 1234567890")
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = if (selectedTab == 0) Icons.Default.Phone else Icons.Default.Person,
+                        contentDescription = "Penerima",
+                        tint = PrimaryBlue
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("transfer_destination_input"),
@@ -225,7 +267,7 @@ fun TransferScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Penerima: $recipientNameLookup",
+                        text = "Penerima Terverifikasi: $recipientNameLookup",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = EmeraldSuccess
@@ -240,16 +282,16 @@ fun TransferScreen(
                 text = "Nominal Transfer",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = com.example.ui.theme.TextPrimaryDark
+                color = TextPrimaryDark
             )
             Spacer(modifier = Modifier.height(6.dp))
 
             OutlinedTextField(
                 value = amountInput,
                 onValueChange = { input -> if (input.all { it.isDigit() }) amountInput = input },
-                textStyle = com.example.ui.components.kivoBigAmountTextStyle(),
-                colors = com.example.ui.components.kivoTextFieldColors(),
-                leadingIcon = { Text("Rp ", fontWeight = FontWeight.Black, fontSize = 18.sp, color = RoyalBlueAccent) },
+                textStyle = kivoBigAmountTextStyle(),
+                colors = kivoTextFieldColors(),
+                leadingIcon = { Text("Rp ", fontWeight = FontWeight.Black, fontSize = 18.sp, color = PrimaryBlue) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("transfer_amount_input"),
@@ -265,81 +307,122 @@ fun TransferScreen(
                 modifier = Modifier.padding(top = 4.dp)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Notes / Message
-            OutlinedTextField(
-                value = notesInput,
-                onValueChange = { notesInput = it },
-                textStyle = com.example.ui.components.kivoInputTextStyle(),
-                colors = com.example.ui.components.kivoTextFieldColors(),
-                label = { Text("Catatan / Pesan (Opsional)") },
+            // Quick Nominal Chips
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                singleLine = true
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Transaction Summary Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Rincian Transfer", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Nominal Transfer", fontSize = 13.sp, color = TextSecondaryMuted)
-                        Text("Rp ${formatCurrency(amountDouble)}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Biaya Transaksi", fontSize = 13.sp, color = TextSecondaryMuted)
+                listOf(20000, 50000, 100000, 200000).forEach { quickNominal ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(SoftBlueBg, RoundedCornerShape(8.dp))
+                            .border(1.dp, PrimaryBlue.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .clickable { amountInput = quickNominal.toString() }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            if (serviceFee == 0.0) "GRATIS" else "Rp ${formatCurrency(serviceFee)}",
-                            fontSize = 13.sp,
+                            text = "${quickNominal / 1000}rb",
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (serviceFee == 0.0) EmeraldSuccess else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outline))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Total Terpotong", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Rp ${formatCurrency(totalDeduction)}",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Black,
-                            color = RoyalBlueAccent
+                            color = PrimaryBlue
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Notes / Catatan
+            Text("Catatan Transfer (Opsional)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
+            Spacer(modifier = Modifier.height(6.dp))
+            OutlinedTextField(
+                value = notesInput,
+                onValueChange = { notesInput = it },
+                textStyle = kivoInputTextStyle(),
+                colors = kivoTextFieldColors(),
+                placeholder = { Text("Contoh: Bayar makan siang") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Cost Breakdown Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = CleanWhite),
+                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderColor)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Rincian Transaksi", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Tujuan", fontSize = 12.sp, color = TextSecondaryMuted)
+                        Text(
+                            if (selectedTab == 0) "Sesama KivoPay" else selectedBank,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimaryDark
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Nominal", fontSize = 12.sp, color = TextSecondaryMuted)
+                        Text("Rp ${formatCurrency(amountDouble)}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextPrimaryDark)
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Biaya Layanan", fontSize = 12.sp, color = TextSecondaryMuted)
+                        Text(
+                            if (serviceFee == 0.0) "GRATIS" else "Rp ${formatCurrency(serviceFee)}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (serviceFee == 0.0) EmeraldSuccess else PrimaryBlue
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(CardBorderColor))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Total Pembayaran", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
+                        Text("Rp ${formatCurrency(totalDeduction)}", fontSize = 15.sp, fontWeight = FontWeight.Black, color = PrimaryBlueDark)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = { showPinSheet = true },
-                enabled = amountDouble >= 10000.0 && isBalanceSufficient && destinationInput.isNotEmpty(),
+                enabled = amountDouble >= 10000.0 && isBalanceSufficient && destinationInput.length >= 8,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
                     .testTag("submit_transfer_button"),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = RoyalBlueAccent)
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
             ) {
-                Text("Lanjutkan & Konfirmasi PIN", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Lanjutkan Transfer", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = CleanWhite)
             }
         }
     }
 
     if (showPinSheet) {
         PinInputDialog(
-            title = "Otorisasi PIN Transfer",
-            subtitle = "Transfer Rp ${formatCurrency(amountDouble)} ke $bankName ($destinationInput)",
+            title = "Konfirmasi PIN Keamanan",
+            subtitle = "Transfer Rp ${formatCurrency(amountDouble)} ke $recipientNameLookup",
             onDismiss = { showPinSheet = false },
             onPinSubmitted = { pin ->
                 showPinSheet = false

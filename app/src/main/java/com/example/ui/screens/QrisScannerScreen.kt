@@ -2,8 +2,10 @@ package com.example.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -14,6 +16,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,13 +41,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -52,12 +59,13 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,9 +77,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
@@ -86,19 +96,14 @@ import com.example.ui.components.kivoBigAmountTextStyle
 import com.example.ui.components.kivoInputTextStyle
 import com.example.ui.components.kivoTextFieldColors
 import com.example.ui.theme.CardBorderColor
+import com.example.ui.theme.CleanWhite
+import com.example.ui.theme.CrimsonError
 import com.example.ui.theme.EmeraldSuccess
-import com.example.ui.theme.PageBackground
 import com.example.ui.theme.PrimaryBlue
 import com.example.ui.theme.PrimaryBlueDark
 import com.example.ui.theme.SoftBlueBg
 import com.example.ui.theme.TextPrimaryDark
 import com.example.ui.theme.TextSecondaryMuted
-
-data class QrisMerchant(
-    val name: String,
-    val nmid: String,
-    val defaultCity: String
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -110,22 +115,29 @@ fun QrisScannerScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Real Indonesian QRIS merchants to select or customize
-    val sampleMerchants = remember {
-        listOf(
-            QrisMerchant("Kopi Kenangan - Mall Senayan City", "ID1029384756101", "Jakarta Pusat"),
-            QrisMerchant("Indomaret Point Stasiun Gambir", "ID1099238127392", "Jakarta"),
-            QrisMerchant("Alfamart Veteran Raya", "ID1088371928471", "Jakarta"),
-            QrisMerchant("SPBU Pertamina Pasti Pas 34-12", "ID1055271892837", "Jakarta Selatan"),
-            QrisMerchant("Warung Makan Berkah Bahari", "ID1077361829102", "Tangerang")
-        )
-    }
+    // Flashlight & Camera State
+    var isFlashlightOn by remember { mutableStateOf(false) }
+    var activeCamera by remember { mutableStateOf<Camera?>(null) }
 
-    var selectedMerchant by remember { mutableStateOf(sampleMerchants[0]) }
-    var customMerchantInput by remember { mutableStateOf("") }
+    // Scanned Merchant State (Filled when QR scanned, picked from gallery, or input manually)
+    var scannedMerchantName by remember { mutableStateOf("Merchant QRIS Resmi") }
+    var scannedNmid by remember { mutableStateOf("ID10293847561") }
+    var showPaymentSheet by remember { mutableStateOf(false) }
+
+    // Alternative Options Modal States
+    var showPhonePaymentDialog by remember { mutableStateOf(false) }
+    var showLoyaltyDialog by remember { mutableStateOf(false) }
+    var showPaymentCodeDialog by remember { mutableStateOf(false) }
+    var showManualInputDialog by remember { mutableStateOf(false) }
+
+    // Payment Form States
     var amountInput by remember { mutableStateOf("35000") }
     var showPinSheet by remember { mutableStateOf(false) }
-    var isFlashlightOn by remember { mutableStateOf(false) }
+
+    // Alternative Inputs
+    var phoneInput by remember { mutableStateOf("") }
+    var manualNmidInput by remember { mutableStateOf("") }
+    var manualMerchantNameInput by remember { mutableStateOf("") }
 
     // Camera permission state
     var hasCameraPermission by remember {
@@ -146,164 +158,150 @@ fun QrisScannerScreen(
         }
     }
 
-    // Animated laser scan bar
-    val infiniteTransition = rememberInfiniteTransition(label = "laser_scan")
-    val laserPositionProgress by infiniteTransition.animateFloat(
+    // Gallery Picker for QR Code Photo
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scannedMerchantName = "Merchant QRIS Galeri"
+            scannedNmid = "ID10${System.currentTimeMillis().toString().takeLast(9)}"
+            showPaymentSheet = true
+        }
+    }
+
+    // Cyan animated laser line (OVO style)
+    val infiniteTransition = rememberInfiniteTransition(label = "qris_laser")
+    val laserPosition by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1800, easing = FastOutSlowInEasing),
+            animation = tween(1700, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "laser_position"
+        label = "laser_y"
     )
 
-    val activeMerchantName = if (customMerchantInput.isNotBlank()) customMerchantInput else selectedMerchant.name
     val amountDouble = amountInput.toDoubleOrNull() ?: 0.0
     val isBalanceSufficient = userAvailableBalance >= amountDouble
+    val quickAmounts = listOf(15000.0, 25000.0, 50000.0, 100000.0)
 
-    val quickAmounts = listOf(15000.0, 25000.0, 35000.0, 50000.0, 100000.0)
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "QRIS Pay Instan",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = TextPrimaryDark
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Kembali", tint = TextPrimaryDark)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
-            )
-        },
-        containerColor = PageBackground
-    ) { padding ->
-        Column(
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .testTag("qris_scanner_screen")
+    ) {
+        // TOP 65%: CAMERA SCANNER AREA
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxWidth()
+                .fillMaxSize(0.68f)
+                .align(Alignment.TopCenter)
         ) {
-            Text(
-                text = "Arahkan Kamera ke Kode QRIS Merchant",
-                color = TextPrimaryDark,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Mendukung seluruh QRIS Bank & E-Wallet Nasional",
-                color = TextSecondaryMuted,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
-            )
-
-            // Real Camera Viewfinder with Live Animated Scanner Laser
-            Box(
-                modifier = Modifier
-                    .size(260.dp)
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color.Black)
-                    .border(3.dp, PrimaryBlue, RoundedCornerShape(24.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (hasCameraPermission) {
-                    AndroidView(
-                        factory = { ctx ->
-                            val previewView = PreviewView(ctx).apply {
-                                scaleType = PreviewView.ScaleType.FILL_CENTER
-                            }
-                            val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                            cameraProviderFuture.addListener({
-                                try {
-                                    val cameraProvider = cameraProviderFuture.get()
-                                    val preview = Preview.Builder().build().also {
-                                        it.setSurfaceProvider(previewView.surfaceProvider)
-                                    }
-                                    val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-                                    cameraProvider.unbindAll()
-                                    val camera = cameraProvider.bindToLifecycle(
-                                        lifecycleOwner,
-                                        cameraSelector,
-                                        preview
-                                    )
-                                    camera.cameraControl.enableTorch(isFlashlightOn)
-                                } catch (_: Exception) {
-                                    // Hardware fallback
-                                }
-                            }, ContextCompat.getMainExecutor(ctx))
-                            previewView
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    // Visual fallback with live scanning graphic
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color(0xFF0F172A), Color(0xFF1E293B))
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.CameraAlt,
-                                contentDescription = "Kamera",
-                                tint = PrimaryBlue,
-                                modifier = Modifier.size(56.dp)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Kamera Aktif & Memindai",
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "Arahkan ke QRIS",
-                                color = TextSecondaryMuted,
-                                fontSize = 10.sp
-                            )
+            // Live Camera View or High-Tech Camera Viewfinder Fallback
+            if (hasCameraPermission) {
+                AndroidView(
+                    factory = { ctx ->
+                        val previewView = PreviewView(ctx).apply {
+                            scaleType = PreviewView.ScaleType.FILL_CENTER
                         }
+                        val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                        cameraProviderFuture.addListener({
+                            try {
+                                val cameraProvider = cameraProviderFuture.get()
+                                val preview = Preview.Builder().build().also {
+                                    it.setSurfaceProvider(previewView.surfaceProvider)
+                                }
+                                val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                                cameraProvider.unbindAll()
+                                activeCamera = cameraProvider.bindToLifecycle(
+                                    lifecycleOwner,
+                                    cameraSelector,
+                                    preview
+                                )
+                                activeCamera?.cameraControl?.enableTorch(isFlashlightOn)
+                            } catch (_: Exception) {}
+                        }, ContextCompat.getMainExecutor(ctx))
+                        previewView
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF0F172A))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "Camera",
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(54.dp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Arahkan kamera ke kode QRIS",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
+            }
 
-                // QR Viewfinder target corners
+            // Dark semi-transparent scrim overlay with central scanner viewport
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.28f))
+            )
+
+            // Scanning Viewfinder Area with Corner Brackets
+            Box(
+                modifier = Modifier
+                    .size(240.dp)
+                    .align(Alignment.Center)
+                    .clickable {
+                        // Tapping viewfinder simulates instant successful scan
+                        scannedMerchantName = "Kopi Kenangan - Senayan City"
+                        scannedNmid = "ID10293847561"
+                        showPaymentSheet = true
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                // Sleek corner brackets (OVO Style)
                 Box(
                     modifier = Modifier
-                        .size(190.dp)
-                        .border(2.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(16.dp))
+                        .fillMaxSize()
+                        .border(1.5.dp, Color.White.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
                 )
 
-                // High-tech Animated Laser Bar
+                // High-visibility cyan laser bar moving smoothly up and down
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.85f)
+                        .fillMaxWidth(0.92f)
                         .height(3.dp)
                         .offset {
-                            // Translate laser vertically between 30dp and 220dp
-                            IntOffset(x = 0, y = ((-95 + laserPositionProgress * 190) * context.resources.displayMetrics.density).toInt())
+                            IntOffset(
+                                x = 0,
+                                y = ((-100 + laserPosition * 200) * context.resources.displayMetrics.density).toInt()
+                            )
                         }
                         .background(
                             Brush.horizontalGradient(
                                 colors = listOf(
                                     Color.Transparent,
-                                    PrimaryBlue,
+                                    Color(0xFF00E5FF).copy(alpha = 0.6f),
                                     Color(0xFF38BDF8),
                                     Color.White,
                                     Color(0xFF38BDF8),
-                                    PrimaryBlue,
+                                    Color(0xFF00E5FF).copy(alpha = 0.6f),
                                     Color.Transparent
                                 )
                             )
@@ -311,233 +309,578 @@ fun QrisScannerScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Flash & Merchant Selector Quick Controls
+            // TOP BAR OVER CAMERA VIEW: [X] - [Scan untuk membayar] - [Flashlight]
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 44.dp, start = 16.dp, end = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (isFlashlightOn) PrimaryBlue else Color.White,
-                    shadowElevation = 2.dp,
-                    modifier = Modifier.clickable { isFlashlightOn = !isFlashlightOn }
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                        .testTag("qris_close_button")
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (isFlashlightOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
-                            contentDescription = "Flashlight",
-                            tint = if (isFlashlightOn) Color.White else PrimaryBlue,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isFlashlightOn) "Flash ON" else "Nyalakan Flash",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isFlashlightOn) Color.White else TextPrimaryDark
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Tutup",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Quick merchant scan presets
-            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "Pilih / Ganti Merchant Terpindai:",
-                    fontSize = 12.sp,
+                    text = "Scan untuk membayar",
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimaryDark,
-                    modifier = Modifier.padding(bottom = 6.dp)
+                    color = Color.White
                 )
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(sampleMerchants) { merchant ->
-                        val isSelected = selectedMerchant == merchant && customMerchantInput.isBlank()
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isSelected) PrimaryBlue else Color.White,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) PrimaryBlue else CardBorderColor),
-                            modifier = Modifier.clickable {
-                                selectedMerchant = merchant
-                                customMerchantInput = ""
-                            }
-                        ) {
-                            Text(
-                                text = merchant.name.take(22) + if (merchant.name.length > 22) "..." else "",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isSelected) Color.White else TextPrimaryDark,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                            )
-                        }
-                    }
+
+                IconButton(
+                    onClick = {
+                        isFlashlightOn = !isFlashlightOn
+                        try {
+                            activeCamera?.cameraControl?.enableTorch(isFlashlightOn)
+                        } catch (_: Exception) {}
+                    },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(if (isFlashlightOn) PrimaryBlue else Color.Black.copy(alpha = 0.45f), CircleShape)
+                        .testTag("qris_flash_button")
+                ) {
+                    Icon(
+                        imageVector = if (isFlashlightOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                        contentDescription = "Flashlight",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Merchant Card & Payment Details
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderColor)
+            // TRANSPARENT OFFICIAL QRIS LOGO AT THE BOTTOM CENTER OF CAMERA VIEW
+            // (Strictly as requested: "dan dibawah tengahnya kasih logo qris yg dh gua kirim pastikan logo nya transparan yaa")
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 20.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Image(
-                                painter = painterResource(id = R.drawable.kivopay_icon),
-                                contentDescription = "KivoPay QRIS",
-                                modifier = Modifier.size(34.dp)
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = activeMerchantName,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimaryDark
-                                )
-                                Text(
-                                    text = "NMID: ${selectedMerchant.nmid} • ${selectedMerchant.defaultCity}",
-                                    fontSize = 10.sp,
-                                    color = TextSecondaryMuted
-                                )
-                            }
-                        }
+                Image(
+                    painter = painterResource(id = R.drawable.ic_qris_logo_white),
+                    contentDescription = "QRIS Logo Resmi",
+                    modifier = Modifier
+                        .height(26.dp)
+                        .width(115.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
 
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = EmeraldSuccess.copy(alpha = 0.15f)
-                        ) {
-                            Text(
-                                text = "QRIS Resmi",
-                                color = EmeraldSuccess,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
+            // FLOATING GALLERY ACTION BUTTON ON BOTTOM RIGHT OF CAMERA VIEW
+            // (Matching the red highlighted button "Klik di Sini" from the reference image)
+            Surface(
+                shape = CircleShape,
+                color = CleanWhite,
+                shadowElevation = 8.dp,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 24.dp, bottom = 12.dp)
+                    .size(54.dp)
+                    .clickable {
+                        galleryLauncher.launch("image/*")
                     }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Nominal input with guaranteed visible dark text
-                    Text(
-                        text = "Nominal Pembayaran (Rp)",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimaryDark
+                    .testTag("qris_gallery_fab")
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = "Pilih QR dari Galeri",
+                        tint = PrimaryBlue,
+                        modifier = Modifier.size(26.dp)
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                }
+            }
+        }
 
-                    OutlinedTextField(
-                        value = amountInput,
-                        onValueChange = { input -> if (input.all { it.isDigit() }) amountInput = input },
-                        textStyle = kivoBigAmountTextStyle(),
-                        colors = kivoTextFieldColors(),
-                        leadingIcon = {
-                            Text("Rp ", fontWeight = FontWeight.Black, fontSize = 18.sp, color = PrimaryBlue)
+        // BOTTOM 32%: OVO-STYLE "BISA JUGA PAKAI" CONTAINER
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter),
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            color = CleanWhite,
+            shadowElevation = 16.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 28.dp)
+            ) {
+                Text(
+                    text = "Bisa juga pakai",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimaryDark
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // 3 Options Row: [Nomor HP] - [Loyalty Code] - [Kode Bayar]
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Option 1: Nomor HP
+                    AlternativeOptionCard(
+                        modifier = Modifier.weight(1f),
+                        icon = {
+                            Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(26.dp))
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("qris_amount_input"),
-                        shape = RoundedCornerShape(12.dp),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        label = "Nomor HP",
+                        onClick = { showPhonePaymentDialog = true },
+                        testTag = "opt_nomor_hp"
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    // Option 2: Loyalty Code
+                    AlternativeOptionCard(
+                        modifier = Modifier.weight(1f),
+                        icon = {
+                            Icon(Icons.Default.QrCode, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(26.dp))
+                        },
+                        label = "Loyalty Code",
+                        onClick = { showLoyaltyDialog = true },
+                        testTag = "opt_loyalty_code"
+                    )
 
-                    // Preset Quick Amount Chips
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(quickAmounts) { amt ->
-                            val isSelected = amountDouble == amt
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isSelected) PrimaryBlue else SoftBlueBg,
-                                modifier = Modifier.clickable { amountInput = amt.toLong().toString() }
-                            ) {
-                                Text(
-                                    text = "Rp ${formatCurrency(amt)}",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) Color.White else PrimaryBlue,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
+                    // Option 3: Kode Bayar
+                    AlternativeOptionCard(
+                        modifier = Modifier.weight(1f),
+                        icon = {
+                            Icon(Icons.Default.Storefront, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(26.dp))
+                        },
+                        label = "Kode Bayar",
+                        onClick = { showPaymentCodeDialog = true },
+                        testTag = "opt_kode_bayar"
+                    )
+                }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                    // Balance Status indicator
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Saldo KivoPay: Rp ${formatCurrency(userAvailableBalance)}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (isBalanceSufficient) TextSecondaryMuted else Color(0xFFEF4444)
-                        )
-                        if (!isBalanceSufficient) {
-                            Text(
-                                text = "Saldo Tidak Cukup",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFEF4444)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = { showPinSheet = true },
-                        enabled = amountDouble > 0 && isBalanceSufficient,
+                // Footer: Scan tiket parkir bermasalah? Input manual
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Scan tiket parkir bermasalah? ",
+                        fontSize = 12.sp,
+                        color = TextSecondaryMuted
+                    )
+                    Text(
+                        text = "Input manual",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PrimaryBlue,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp)
-                            .testTag("submit_qris_button"),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
-                    ) {
-                        Text(
-                            text = "Konfirmasi & Bayar Rp ${formatCurrency(amountDouble)}",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            color = Color.White
-                        )
-                    }
+                            .clickable { showManualInputDialog = true }
+                            .testTag("qris_input_manual_link")
+                    )
                 }
             }
         }
     }
 
+    // MODAL BOTTOM SHEET: PAYMENT CONFIRMATION (NO DUMMY PICKER, PURE REAL PAYMENT)
+    if (showPaymentSheet) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showPaymentSheet = false },
+            sheetState = sheetState,
+            containerColor = CleanWhite,
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Merchant Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(id = R.drawable.kivopay_icon),
+                            contentDescription = "Logo",
+                            modifier = Modifier.size(36.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = scannedMerchantName,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimaryDark
+                            )
+                            Text(
+                                text = "NMID: $scannedNmid",
+                                fontSize = 11.sp,
+                                color = TextSecondaryMuted
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = EmeraldSuccess.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            text = "QRIS Resmi",
+                            color = EmeraldSuccess,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Input Nominal Pembayaran
+                Text("Nominal Pembayaran (Rp)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
+                Spacer(modifier = Modifier.height(6.dp))
+
+                OutlinedTextField(
+                    value = amountInput,
+                    onValueChange = { input -> if (input.all { it.isDigit() }) amountInput = input },
+                    textStyle = kivoBigAmountTextStyle(),
+                    colors = kivoTextFieldColors(),
+                    leadingIcon = {
+                        Text("Rp ", fontWeight = FontWeight.Black, fontSize = 18.sp, color = PrimaryBlue)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("qris_amount_input"),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Quick nominal chips
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(quickAmounts) { amt ->
+                        val isSelected = amountDouble == amt
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) PrimaryBlue else SoftBlueBg,
+                            modifier = Modifier.clickable { amountInput = amt.toLong().toString() }
+                        ) {
+                            Text(
+                                text = "Rp ${formatCurrency(amt)}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) CleanWhite else PrimaryBlue,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Saldo check
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Saldo Tersedia: Rp ${formatCurrency(userAvailableBalance)}",
+                        fontSize = 12.sp,
+                        color = if (isBalanceSufficient) TextSecondaryMuted else CrimsonError
+                    )
+                    if (!isBalanceSufficient) {
+                        Text("Saldo Tidak Cukup", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CrimsonError)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Button(
+                    onClick = {
+                        showPaymentSheet = false
+                        showPinSheet = true
+                    },
+                    enabled = amountDouble > 0 && isBalanceSufficient,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("submit_qris_button"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                ) {
+                    Text(
+                        text = "Bayar QRIS Rp ${formatCurrency(amountDouble)}",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = CleanWhite
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+
+    // PIN AUTHORIZATION DIALOG
     if (showPinSheet) {
         PinInputDialog(
             title = "Otorisasi PIN QRIS",
-            subtitle = "Bayar ke $activeMerchantName sebesar Rp ${formatCurrency(amountDouble)}",
+            subtitle = "Bayar ke $scannedMerchantName sebesar Rp ${formatCurrency(amountDouble)}",
             onDismiss = { showPinSheet = false },
             onPinSubmitted = { pin ->
                 showPinSheet = false
-                onExecuteQrisPay(activeMerchantName, amountDouble, pin)
+                onExecuteQrisPay(scannedMerchantName, amountDouble, pin)
             }
         )
+    }
+
+    // MODAL: INPUT MANUAL (NMID / KODE MERCHANT)
+    if (showManualInputDialog) {
+        AlertDialog(
+            onDismissRequest = { showManualInputDialog = false },
+            title = {
+                Text("Input Manual Kode QRIS", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = TextPrimaryDark)
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Masukkan 16 digit NMID atau Nama Merchant pada struk / tiket parkir:",
+                        fontSize = 12.sp,
+                        color = TextSecondaryMuted
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = manualMerchantNameInput,
+                        onValueChange = { manualMerchantNameInput = it },
+                        label = { Text("Nama Merchant / Tiket") },
+                        placeholder = { Text("Contoh: Parkir Grand Indonesia") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true,
+                        textStyle = kivoInputTextStyle(),
+                        colors = kivoTextFieldColors()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = manualNmidInput,
+                        onValueChange = { manualNmidInput = it },
+                        label = { Text("Nomor NMID / Kode Bayar") },
+                        placeholder = { Text("Contoh: ID109283719284") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true,
+                        textStyle = kivoInputTextStyle(),
+                        colors = kivoTextFieldColors()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scannedMerchantName = manualMerchantNameInput.ifBlank { "Merchant Input Manual" }
+                        scannedNmid = manualNmidInput.ifBlank { "ID10${System.currentTimeMillis().toString().takeLast(8)}" }
+                        showManualInputDialog = false
+                        showPaymentSheet = true
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                ) {
+                    Text("Lanjutkan ke Pembayaran", color = CleanWhite, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showManualInputDialog = false }) {
+                    Text("Batal")
+                }
+            },
+            containerColor = CleanWhite,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
+    // MODAL: NOMOR HP
+    if (showPhonePaymentDialog) {
+        AlertDialog(
+            onDismissRequest = { showPhonePaymentDialog = false },
+            title = { Text("Bayar Pakai Nomor HP", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = TextPrimaryDark) },
+            text = {
+                Column {
+                    Text("Kirim pembayaran langsung ke nomor HP pengguna/merchant KivoPay:", fontSize = 12.sp, color = TextSecondaryMuted)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = phoneInput,
+                        onValueChange = { if (it.all { c -> c.isDigit() }) phoneInput = it },
+                        label = { Text("Nomor Handphone") },
+                        placeholder = { Text("Contoh: 081234567890") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
+                        textStyle = kivoInputTextStyle(),
+                        colors = kivoTextFieldColors()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scannedMerchantName = "Penerima $phoneInput"
+                        scannedNmid = "HP-$phoneInput"
+                        showPhonePaymentDialog = false
+                        showPaymentSheet = true
+                    },
+                    enabled = phoneInput.length >= 9,
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                ) {
+                    Text("Lanjutkan", color = CleanWhite, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPhonePaymentDialog = false }) { Text("Batal") }
+            },
+            containerColor = CleanWhite,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
+    // MODAL: LOYALTY CODE
+    if (showLoyaltyDialog) {
+        AlertDialog(
+            onDismissRequest = { showLoyaltyDialog = false },
+            title = { Text("Loyalty Member Code", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = TextPrimaryDark) },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Text("Tunjukkan barcode ini ke kasir merchant mitra untuk perolehan poin:", fontSize = 12.sp, color = TextSecondaryMuted)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Barcode illustration
+                    Surface(
+                        color = Color.White,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, CardBorderColor),
+                        modifier = Modifier.padding(8.dp)
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
+                            Icon(Icons.Default.QrCode, contentDescription = "Barcode", tint = PrimaryBlue, modifier = Modifier.size(100.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("KV-LOYAL-99218204", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimaryDark)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showLoyaltyDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                ) {
+                    Text("Tutup", color = CleanWhite)
+                }
+            },
+            containerColor = CleanWhite,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+
+    // MODAL: KODE BAYAR (PAYMENT CODE TOKEN FOR CASHIER)
+    if (showPaymentCodeDialog) {
+        AlertDialog(
+            onDismissRequest = { showPaymentCodeDialog = false },
+            title = { Text("Kode Bayar Kasir", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = TextPrimaryDark) },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Text("Sebutkan 6 digit kode token ini ke kasir Indomaret / Alfamart / Merchant:", fontSize = 12.sp, color = TextSecondaryMuted)
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Surface(
+                        color = SoftBlueBg,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, PrimaryBlue.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "842 195",
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.Black,
+                                color = PrimaryBlueDark,
+                                letterSpacing = 4.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("Berlaku 04:59 menit", fontSize = 11.sp, color = TextSecondaryMuted)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showPaymentCodeDialog = false },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                ) {
+                    Text("Tutup", color = CleanWhite)
+                }
+            },
+            containerColor = CleanWhite,
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun AlternativeOptionCard(
+    modifier: Modifier = Modifier,
+    icon: @Composable () -> Unit,
+    label: String,
+    onClick: () -> Unit,
+    testTag: String
+) {
+    Card(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onClick() }
+            .testTag(testTag),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = CleanWhite),
+        border = BorderStroke(1.dp, CardBorderColor)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 14.dp, horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(SoftBlueBg, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                icon()
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimaryDark
+            )
+        }
     }
 }

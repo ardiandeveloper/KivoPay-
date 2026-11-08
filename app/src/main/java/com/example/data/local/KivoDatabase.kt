@@ -9,12 +9,15 @@ import androidx.room.TypeConverters
 import com.example.data.dao.AdminConfigDao
 import com.example.data.dao.AuditLogDao
 import com.example.data.dao.BannerDao
+import com.example.data.dao.BankChangeRequestDao
 import com.example.data.dao.NotificationDao
 import com.example.data.dao.TransactionDao
 import com.example.data.dao.UserDao
 import com.example.data.model.AdminConfigEntity
 import com.example.data.model.AuditLogEntity
 import com.example.data.model.BannerEntity
+import com.example.data.model.BankChangeRequestEntity
+import com.example.data.model.BankChangeStatus
 import com.example.data.model.KycStatus
 import com.example.data.model.NotificationEntity
 import com.example.data.model.TransactionEntity
@@ -40,6 +43,12 @@ class Converters {
 
     @TypeConverter
     fun toKycStatus(value: String): KycStatus = runCatching { KycStatus.valueOf(value) }.getOrDefault(KycStatus.PENDING)
+
+    @TypeConverter
+    fun fromBankChangeStatus(status: BankChangeStatus): String = status.name
+
+    @TypeConverter
+    fun toBankChangeStatus(value: String): BankChangeStatus = runCatching { BankChangeStatus.valueOf(value) }.getOrDefault(BankChangeStatus.PENDING_CS)
 }
 
 @Database(
@@ -49,9 +58,10 @@ class Converters {
         NotificationEntity::class,
         BannerEntity::class,
         AdminConfigEntity::class,
-        AuditLogEntity::class
+        AuditLogEntity::class,
+        BankChangeRequestEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -62,6 +72,7 @@ abstract class KivoDatabase : RoomDatabase() {
     abstract fun bannerDao(): BannerDao
     abstract fun adminConfigDao(): AdminConfigDao
     abstract fun auditLogDao(): AuditLogDao
+    abstract fun bankChangeRequestDao(): BankChangeRequestDao
 
     companion object {
         @Volatile

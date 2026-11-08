@@ -25,6 +25,7 @@ import com.example.ui.components.ModernBottomNavBar
 import com.example.ui.screens.AdminDashboardScreen
 import com.example.ui.screens.AktivitasScreen
 import com.example.ui.screens.AuthScreen
+import com.example.ui.screens.ChangeBankAccountScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.NotifikasiScreen
 import com.example.ui.screens.PembayaranScreen
@@ -69,6 +70,8 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
     val pendingKycUsers by viewModel.pendingKycUsers.collectAsStateWithLifecycle()
     val withdrawalRequests by viewModel.withdrawalRequests.collectAsStateWithLifecycle()
     val auditLogs by viewModel.auditLogs.collectAsStateWithLifecycle()
+    val userBankChangeRequests by viewModel.userBankChangeRequests.collectAsStateWithLifecycle()
+    val allBankChangeRequests by viewModel.allBankChangeRequests.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -203,6 +206,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                                 4 -> ProfilScreen(
                                     user = currentUser,
                                     onNavigateAdmin = { viewModel.navigateTo(AppScreen.ADMIN_DASHBOARD) },
+                                    onNavigateChangeBank = { viewModel.navigateTo(AppScreen.CHANGE_BANK) },
                                     onLogout = { viewModel.logout() },
                                     onUpdatePin = { oldPin, newPin -> viewModel.updatePin(oldPin, newPin) {} },
                                     onUpdatePassword = { oldPass, newPass -> viewModel.updatePassword(oldPass, newPass) {} },
@@ -228,12 +232,24 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                         )
 
                         AppScreen.WITHDRAW -> WithdrawScreen(
+                            user = currentUser,
                             userAvailableBalance = currentUser?.saldoAvailable ?: 0.0,
                             configuredFee = withdrawFeeConfig?.value?.toDoubleOrNull() ?: 3000.0,
                             onBack = { viewModel.navigateTo(AppScreen.MAIN) },
+                            onNavigateToChangeBank = { viewModel.navigateTo(AppScreen.CHANGE_BANK) },
                             onSubmitWithdrawal = { bankName, accountNo, recipientName, amount, pin ->
                                 viewModel.withdraw(bankName, accountNo, recipientName, amount, pin) {}
                             }
+                        )
+
+                        AppScreen.CHANGE_BANK -> ChangeBankAccountScreen(
+                            user = currentUser,
+                            activeRequests = userBankChangeRequests,
+                            onBack = { viewModel.navigateTo(AppScreen.MAIN) },
+                            onSubmitRequest = { newBank, newAccNo, newAccHolder, reason, ktpUri, selfieUri, onSuccess ->
+                                viewModel.submitBankChangeRequest(newBank, newAccNo, newAccHolder, reason, ktpUri, selfieUri, onSuccess)
+                            },
+                            onShowToast = { msg -> viewModel.showToast(msg) }
                         )
 
                         AppScreen.PAYMENT -> PembayaranScreen(
@@ -258,6 +274,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                             withdrawalRequests = withdrawalRequests,
                             allUsers = allUsers,
                             pendingKycUsers = pendingKycUsers,
+                            bankChangeRequests = allBankChangeRequests,
                             allTransactions = allTransactions,
                             auditLogs = auditLogs,
                             activeBanners = activeBanners,
@@ -266,6 +283,8 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                             onRejectWithdraw = { txId, reason -> viewModel.rejectWithdrawal(txId, reason) },
                             onApproveKyc = { userId -> viewModel.adminApproveKyc(userId) },
                             onRejectKyc = { userId, reason -> viewModel.adminRejectKyc(userId, reason) },
+                            onApproveBankChange = { reqId -> viewModel.adminApproveBankChange(reqId) },
+                            onRejectBankChange = { reqId, reason -> viewModel.adminRejectBankChange(reqId, reason) },
                             onSaveWithdrawFee = { newFee -> viewModel.updateWithdrawFee(newFee) },
                             onAddBanner = { title, subtitle, badge, color ->
                                 viewModel.adminAddBanner(title, subtitle, badge, color)

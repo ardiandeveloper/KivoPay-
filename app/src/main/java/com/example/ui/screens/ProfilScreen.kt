@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
@@ -76,6 +77,7 @@ import com.example.ui.theme.TextSecondaryMuted
 fun ProfilScreen(
     user: UserEntity?,
     onNavigateAdmin: () -> Unit,
+    onNavigateChangeBank: () -> Unit = {},
     onLogout: () -> Unit,
     onUpdatePin: (String, String) -> Unit,
     onUpdatePassword: (String, String) -> Unit,
@@ -148,13 +150,13 @@ fun ProfilScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Account Number Tag
+                        // ID KivoPay (Nomor Handphone) Tag
                         Surface(
                             shape = RoundedCornerShape(8.dp),
                             color = Color.White.copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = "Rekening KivoPay: ${user?.accountId ?: "1089283741"}",
+                                text = "ID KivoPay (Nomor HP): ${user?.phoneNumber?.ifBlank { "081298765432" } ?: "081298765432"}",
                                 color = CleanWhite,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -176,44 +178,57 @@ fun ProfilScreen(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderColor)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(SoftBlueBg, RoundedCornerShape(10.dp)),
-                        contentAlignment = Alignment.Center
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountBalance,
-                            contentDescription = "Bank",
-                            tint = PrimaryBlue,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(SoftBlueBg, RoundedCornerShape(10.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccountBalance,
+                                contentDescription = "Bank",
+                                tint = PrimaryBlue,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Rekening Resmi: ${user?.userBankName?.ifBlank { "Bank BCA" }}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimaryDark
+                            )
+                            Text(
+                                text = "No. ${user?.userBankAccountNumber?.ifBlank { "0889218274" }} (a.n ${user?.userBankAccountHolder?.ifBlank { user?.fullName } ?: user?.fullName})",
+                                fontSize = 12.sp,
+                                color = TextSecondaryMuted
+                            )
+                            Text(
+                                text = if (user?.isKycVerified == true) "Status: Disetujui Admin (Aktif)" else "Status: Menunggu Persetujuan",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (user?.isKycVerified == true) EmeraldSuccess else Color(0xFFD97706)
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Rekening Terdaftar: ${user?.userBankName?.ifBlank { "Bank BCA" }}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimaryDark
-                        )
-                        Text(
-                            text = "No. ${user?.userBankAccountNumber?.ifBlank { "0889218274" }} (A.N ${user?.userBankAccountHolder?.ifBlank { user?.fullName }})",
-                            fontSize = 12.sp,
-                            color = TextSecondaryMuted
-                        )
-                        Text(
-                            text = if (user?.isKycVerified == true) "Status: Disetujui Admin" else "Status: Menunggu Persetujuan",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (user?.isKycVerified == true) EmeraldSuccess else Color(0xFFD97706)
-                        )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = onNavigateChangeBank,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryBlue)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Ajukan Perubahan Rekening Bank", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
                     }
                 }
             }

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -45,6 +46,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -68,6 +70,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.AuditLogEntity
+import com.example.data.model.BankChangeRequestEntity
+import com.example.data.model.BankChangeStatus
 import com.example.data.model.BannerEntity
 import com.example.data.model.KycStatus
 import com.example.data.model.TransactionEntity
@@ -75,6 +79,7 @@ import com.example.data.model.TransactionStatus
 import com.example.data.model.UserEntity
 import com.example.ui.components.kivoInputTextStyle
 import com.example.ui.components.kivoTextFieldColors
+import com.example.ui.theme.AmberWarning
 import com.example.ui.theme.CardBorderColor
 import com.example.ui.theme.CrimsonError
 import com.example.ui.theme.EmeraldSuccess
@@ -92,6 +97,7 @@ fun AdminDashboardScreen(
     withdrawalRequests: List<TransactionEntity>,
     allUsers: List<UserEntity>,
     pendingKycUsers: List<UserEntity>,
+    bankChangeRequests: List<BankChangeRequestEntity> = emptyList(),
     allTransactions: List<TransactionEntity>,
     auditLogs: List<AuditLogEntity>,
     activeBanners: List<BannerEntity> = emptyList(),
@@ -100,13 +106,19 @@ fun AdminDashboardScreen(
     onRejectWithdraw: (txId: String, reason: String) -> Unit,
     onApproveKyc: (userId: String) -> Unit,
     onRejectKyc: (userId: String, reason: String) -> Unit,
+    onApproveBankChange: (requestId: String) -> Unit = {},
+    onRejectBankChange: (requestId: String, reason: String) -> Unit = { _, _ -> },
     onSaveWithdrawFee: (newFee: Double) -> Unit,
     onAddBanner: (title: String, subtitle: String, badge: String, colorHex: String) -> Unit = { _, _, _, _ -> },
     onDeleteBanner: (bannerId: String) -> Unit = {}
 ) {
-    // 0: Verifikasi Rekening (KYC), 1: Penarikan, 2: Kelola Banner, 3: Pengguna, 4: Biaya, 5: Audit
+    // 0: Verifikasi Rekening Baru (KYC), 1: Ubah Rekening, 2: Penarikan, 3: Kelola Banner, 4: Pengguna, 5: Biaya, 6: Audit
     var activeAdminTab by remember { mutableStateOf(0) }
     var feeInput by remember { mutableStateOf(currentWithdrawFee) }
+
+    // Dialog state for rejecting Bank Change
+    var selectedBankChangeForReject by remember { mutableStateOf<BankChangeRequestEntity?>(null) }
+    var bankChangeRejectReasonInput by remember { mutableStateOf("Foto e-KTP atau foto selfie tidak sesuai identitas akun") }
 
     // Dialog state for rejecting KYC with mandatory reason
     var selectedUserForKycReject by remember { mutableStateOf<UserEntity?>(null) }
@@ -156,41 +168,47 @@ fun AdminDashboardScreen(
                 .padding(padding)
                 .testTag("admin_dashboard_screen")
         ) {
-            // Scrollable or Row of Admin Tabs
-            TabRow(
+            // Scrollable Row of Admin Tabs
+            ScrollableTabRow(
                 selectedTabIndex = activeAdminTab,
                 containerColor = Color.White,
-                contentColor = PrimaryBlue
+                contentColor = PrimaryBlue,
+                edgePadding = 12.dp
             ) {
                 Tab(
                     selected = activeAdminTab == 0,
                     onClick = { activeAdminTab = 0 },
-                    text = { Text("Rekening (${pendingKycUsers.size})", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("Rekening Baru (${pendingKycUsers.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = activeAdminTab == 1,
                     onClick = { activeAdminTab = 1 },
-                    text = { Text("Tarik Dana (${withdrawalRequests.count { it.status == TransactionStatus.PENDING }})", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("Ubah Rekening (${bankChangeRequests.count { it.status == BankChangeStatus.PENDING_CS }})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = activeAdminTab == 2,
                     onClick = { activeAdminTab = 2 },
-                    text = { Text("Banner (${activeBanners.size})", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("Tarik Dana (${withdrawalRequests.count { it.status == TransactionStatus.PENDING }})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = activeAdminTab == 3,
                     onClick = { activeAdminTab = 3 },
-                    text = { Text("Pengguna", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("Banner (${activeBanners.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = activeAdminTab == 4,
                     onClick = { activeAdminTab = 4 },
-                    text = { Text("Biaya", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("Pengguna (${allUsers.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = activeAdminTab == 5,
                     onClick = { activeAdminTab = 5 },
-                    text = { Text("Audit", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("Biaya", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                )
+                Tab(
+                    selected = activeAdminTab == 6,
+                    onClick = { activeAdminTab = 6 },
+                    text = { Text("Audit", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
             }
 
@@ -325,7 +343,186 @@ fun AdminDashboardScreen(
                 }
 
                 1 -> {
-                    // TAB 1: WITHDRAWAL REQUESTS
+                    // TAB 1: PERMOHONAN UBAH REKENING BANK
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        item {
+                            Text(
+                                text = "Permohonan Perubahan Rekening Bank Terdaftar",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimaryDark
+                            )
+                            Text(
+                                text = "Verifikasi kesesuaian identitas e-KTP dan foto selfie sebelum menyetujui pengalihan rekening resmi.",
+                                fontSize = 12.sp,
+                                color = TextSecondaryMuted
+                            )
+                        }
+
+                        if (bankChangeRequests.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = EmeraldSuccess, modifier = Modifier.size(40.dp))
+                                        Text("Tidak ada permohonan perubahan rekening saat ini.", fontSize = 13.sp, color = TextSecondaryMuted, modifier = Modifier.padding(top = 8.dp))
+                                    }
+                                }
+                            }
+                        } else {
+                            items(bankChangeRequests) { req ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderColor)
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "Tiket: ${req.id}",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = PrimaryBlue
+                                            )
+                                            val (statusBg, statusColor, statusLabel) = when (req.status) {
+                                                BankChangeStatus.PENDING_CS -> Triple(AmberWarning.copy(alpha = 0.15f), AmberWarning, "Menunggu CS & Admin")
+                                                BankChangeStatus.APPROVED -> Triple(EmeraldSuccess.copy(alpha = 0.15f), EmeraldSuccess, "Disetujui")
+                                                BankChangeStatus.REJECTED -> Triple(CrimsonError.copy(alpha = 0.15f), CrimsonError, "Ditolak")
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = statusBg
+                                            ) {
+                                                Text(
+                                                    text = statusLabel,
+                                                    color = statusColor,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        Text(
+                                            text = "Pemohon: ${req.userFullName} (${req.userEmail})",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = TextPrimaryDark
+                                        )
+                                        Text(
+                                            text = "No. HP / WhatsApp: ${req.userPhone}",
+                                            fontSize = 12.sp,
+                                            color = TextSecondaryMuted
+                                        )
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = SoftBlueBg,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Text(
+                                                    text = "Rekening Lama: ${req.oldBankName} - ${req.oldAccountNumber} (a.n ${req.oldAccountHolder})",
+                                                    fontSize = 11.sp,
+                                                    color = TextSecondaryMuted
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Rekening Baru: ${req.newBankName} - ${req.newAccountNumber} (a.n ${req.newAccountHolder})",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = PrimaryBlueDark
+                                                )
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text(
+                                                    text = "Alasan: ${req.changeReason}",
+                                                    fontSize = 11.sp,
+                                                    color = TextPrimaryDark
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Security, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Bukti Dokumen: Foto e-KTP & Foto Selfie (Kamera)",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = PrimaryBlue
+                                            )
+                                        }
+
+                                        if (req.status == BankChangeStatus.REJECTED && req.rejectionReason.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Text(
+                                                text = "Alasan Penolakan: ${req.rejectionReason}",
+                                                fontSize = 11.sp,
+                                                color = CrimsonError
+                                            )
+                                        }
+
+                                        if (req.status == BankChangeStatus.PENDING_CS) {
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        selectedBankChangeForReject = req
+                                                    },
+                                                    modifier = Modifier.weight(1f),
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CrimsonError),
+                                                    border = androidx.compose.foundation.BorderStroke(1.dp, CrimsonError)
+                                                ) {
+                                                    Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Tolak", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                }
+
+                                                Button(
+                                                    onClick = { onApproveBankChange(req.id) },
+                                                    modifier = Modifier.weight(1f),
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess)
+                                                ) {
+                                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Setujui", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                2 -> {
+                    // TAB 2: WITHDRAWAL REQUESTS
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -418,8 +615,8 @@ fun AdminDashboardScreen(
                     }
                 }
 
-                2 -> {
-                    // TAB 2: KELOLA & UPLOAD BANNER PROMO
+                3 -> {
+                    // TAB 3: KELOLA & UPLOAD BANNER PROMO
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -594,8 +791,8 @@ fun AdminDashboardScreen(
                     }
                 }
 
-                3 -> {
-                    // TAB 3: ALL USERS LIST
+                4 -> {
+                    // TAB 4: ALL USERS LIST
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -638,8 +835,8 @@ fun AdminDashboardScreen(
                     }
                 }
 
-                4 -> {
-                    // TAB 4: WITHDRAW FEE CONFIGURATION
+                5 -> {
+                    // TAB 5: WITHDRAW FEE CONFIGURATION
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -689,8 +886,8 @@ fun AdminDashboardScreen(
                     }
                 }
 
-                5 -> {
-                    // TAB 5: AUDIT LOGS
+                6 -> {
+                    // TAB 6: AUDIT LOGS
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -834,6 +1031,59 @@ fun AdminDashboardScreen(
             },
             dismissButton = {
                 TextButton(onClick = { selectedTxForReject = null }) { Text("Batal") }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    // Modal Dialog: Reject Bank Change with Mandatory Reason
+    if (selectedBankChangeForReject != null) {
+        val targetReq = selectedBankChangeForReject!!
+        AlertDialog(
+            onDismissRequest = { selectedBankChangeForReject = null },
+            title = {
+                Text(
+                    text = "Tolak Perubahan Rekening",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = CrimsonError
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Pemohon: ${targetReq.userFullName} (${targetReq.newBankName} - ${targetReq.newAccountNumber})",
+                        fontSize = 12.sp,
+                        color = TextPrimaryDark,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text("Alasan Penolakan Resmi (Wajib):", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
+                    OutlinedTextField(
+                        value = bankChangeRejectReasonInput,
+                        onValueChange = { bankChangeRejectReasonInput = it },
+                        textStyle = kivoInputTextStyle(),
+                        colors = kivoTextFieldColors(),
+                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        placeholder = { Text("Contoh: Foto e-KTP tidak jelas / Data tidak cocok") }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRejectBankChange(targetReq.id, bankChangeRejectReasonInput)
+                        selectedBankChangeForReject = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CrimsonError),
+                    enabled = bankChangeRejectReasonInput.isNotBlank()
+                ) {
+                    Text("Tolak & Catat Alasan", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedBankChangeForReject = null }) { Text("Batal") }
             },
             containerColor = Color.White,
             shape = RoundedCornerShape(16.dp)

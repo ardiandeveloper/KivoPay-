@@ -7,6 +7,7 @@ import com.example.data.local.KivoDatabase
 import com.example.data.local.SessionManager
 import com.example.data.model.AdminConfigEntity
 import com.example.data.model.AuditLogEntity
+import com.example.data.model.BankChangeRequestEntity
 import com.example.data.model.BannerEntity
 import com.example.data.model.NotificationEntity
 import com.example.data.model.TransactionEntity
@@ -35,6 +36,7 @@ enum class AppScreen {
     WITHDRAW,
     PAYMENT,
     QRIS_SCANNER,
+    CHANGE_BANK,
     ADMIN_DASHBOARD,
     RECEIPT_DETAIL
 }
@@ -119,6 +121,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val auditLogs: StateFlow<List<AuditLogEntity>> = repository.allAuditLogs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val userBankChangeRequests: StateFlow<List<BankChangeRequestEntity>> = _currentUserId.flatMapLatest { userId ->
+        if (userId != null) repository.getUserBankChangeRequestsFlow(userId) else flowOf(emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allBankChangeRequests: StateFlow<List<BankChangeRequestEntity>> = repository.getAllBankChangeRequestsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun navigateTo(screen: AppScreen) {
@@ -427,6 +436,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val userId = _currentUserId.value ?: return
         viewModelScope.launch {
             repository.markNotificationsRead(userId)
+        }
+    }
+
+    fun submitBankChangeRequest(
+        newBankName: String,
+        newAccountNumber: String,
+        newAccountHolder: String,
+        changeReason: String,
+        ktpUri: String,
+        selfieKtpUri: String,
+        onSuccess: () -> Unit
+    ) {
+        val userId = _currentUserId.value ?: return
+        viewModelScope.launch {
+            when (val res = repository.submitBankChangeRequest(
+                userId = userId,
+                newBankName = newBankName,
+                newAccountNumber = newAccountNumber,
+                newAccountHolder = newAccountHolder,
+                changeReason = changeReason,
+                ktpDocumentUri = ktpUri,
+                selfieWithKtpUri = selfieKtpUri
+            )) {
+                is ResultState.Success -> {
+                    showToast("Permohonan berhasil dikirim. Silakan hubungi CS KivoPay.")
+                    onSuccess()
+                }
+                is ResultState.Error -> showToast(res.message)
+                else -> {}
+            }
+        }
+    }
+
+    fun adminApproveBankChange(requestId: String) {
+        val adminUser = currentUser.value ?: return
+        viewModelScope.launch {
+            when (val res = repository.adminApproveBankChange(adminUser.email, requestId)) {
+                is ResultState.Success -> showToast(res.data)
+                is ResultState.Error -> showToast(res.message)
+                else -> {}
+            }
+        }
+    }
+
+    fun adminRejectBankChange(requestId: String, reason: String) {
+        val adminUser = currentUser.value ?: return
+        viewModelScope.launch {
+            when (val res = repository.adminRejectBankChange(adminUser.email, requestId, reason)) {
+                is ResultState.Success -> showToast(res.data)
+                is ResultState.Error -> showToast(res.message)
+                else -> {}
+            }
         }
     }
 }

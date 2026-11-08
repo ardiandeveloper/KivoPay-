@@ -31,10 +31,12 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
+import com.example.data.model.IndonesianBanks
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -114,16 +116,11 @@ fun AuthScreen(
     var regPin by remember { mutableStateOf("") }
 
     // Bank Account & Bank Book fields (strictly camera-only, no dummy prefill)
-    val supportedBanks = listOf(
-        "Bank BCA",
-        "Bank Mandiri",
-        "Bank BNI",
-        "Bank BRI",
-        "Bank CIMB Niaga",
-        "Bank Permata",
-        "Bank Danamon",
-        "Bank Syariah Indonesia (BSI)"
-    )
+    val supportedBanks = IndonesianBanks.allBanks
+    var bankSearchQuery by remember { mutableStateOf("") }
+    val filteredBanks = remember(bankSearchQuery) {
+        if (bankSearchQuery.isBlank()) supportedBanks else supportedBanks.filter { it.contains(bankSearchQuery, ignoreCase = true) }
+    }
     var selectedBank by remember { mutableStateOf(supportedBanks[0]) }
     var bankDropdownExpanded by remember { mutableStateOf(false) }
     var bankAccountNo by remember { mutableStateOf("") }
@@ -489,11 +486,24 @@ fun AuthScreen(
                             )
                             ExposedDropdownMenu(
                                 expanded = bankDropdownExpanded,
-                                onDismissRequest = { bankDropdownExpanded = false }
+                                onDismissRequest = { bankDropdownExpanded = false },
+                                modifier = Modifier.height(300.dp)
                             ) {
-                                supportedBanks.forEach { bank ->
+                                OutlinedTextField(
+                                    value = bankSearchQuery,
+                                    onValueChange = { bankSearchQuery = it },
+                                    placeholder = { Text("Cari nama bank...") },
+                                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = PrimaryBlue) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(8.dp),
+                                    singleLine = true,
+                                    textStyle = inputTextStyle,
+                                    colors = customTextFieldColors
+                                )
+                                filteredBanks.take(50).forEach { bank ->
                                     DropdownMenuItem(
-                                        text = { Text(bank, color = TextPrimaryDark) },
+                                        text = { Text(bank, color = TextPrimaryDark, fontSize = 13.sp) },
                                         onClick = {
                                             selectedBank = bank
                                             bankDropdownExpanded = false
