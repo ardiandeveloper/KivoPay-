@@ -122,6 +122,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val withdrawFeeConfig: StateFlow<AdminConfigEntity?> = repository.getWithdrawFeeConfigFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    val rcbApiKeyConfig: StateFlow<AdminConfigEntity?> = repository.getRcbApiKeyConfigFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     // Admin State Flows
     val allTransactions: StateFlow<List<TransactionEntity>> = repository.getAllTransactionsFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -393,6 +396,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val adminUser = currentUser.value ?: return
         viewModelScope.launch {
             when (val res = repository.adminUpdateWithdrawFee(adminUser.email, newFee)) {
+                is ResultState.Success -> showToast(res.data)
+                is ResultState.Error -> showToast(res.message)
+                else -> {}
+            }
+        }
+    }
+
+    fun updateRcbApiKey(newKey: String) {
+        val adminUser = currentUser.value ?: return
+        viewModelScope.launch {
+            when (val res = repository.adminUpdateRcbApiKey(adminUser.email, newKey)) {
                 is ResultState.Success -> showToast(res.data)
                 is ResultState.Error -> showToast(res.message)
                 else -> {}

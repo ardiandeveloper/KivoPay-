@@ -121,7 +121,7 @@ fun WithdrawScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {
-            // Fee & Regulatory Header Info
+            // Fee & RCB Pay Gateway Header Info
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -147,17 +147,33 @@ fun WithdrawScreen(
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Biaya Layanan Admin: Rp ${formatCurrency(configuredFee)}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimaryDark
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = PrimaryBlue.copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = "RCB Pay",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PrimaryBlue,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         Text(
-                            text = "Biaya Layanan Flat Rp ${formatCurrency(configuredFee)}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimaryDark
-                        )
-                        Text(
-                            text = "Penarikan diproses otomatis ke rekening resmi Anda melalui jaringan kliring perbankan nasional.",
+                            text = "Penarikan diproses real-time langsung ke rekening Anda melalui gateway kliring RCB Pay.",
                             fontSize = 11.sp,
                             color = TextSecondaryMuted,
-                            lineHeight = 15.sp
+                            lineHeight = 15.sp,
+                            modifier = Modifier.padding(top = 2.dp)
                         )
                     }
                 }
@@ -310,7 +326,7 @@ fun WithdrawScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Biaya Layanan Penarikan", fontSize = 12.sp, color = TextSecondaryMuted)
+                        Text("Biaya Admin KivoPay", fontSize = 12.sp, color = TextSecondaryMuted)
                         Text("Rp ${formatCurrency(configuredFee)}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
                     }
 
@@ -346,6 +362,8 @@ fun WithdrawScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Tarik Dana Sekarang", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = CleanWhite)
             }
+
+            Spacer(modifier = Modifier.height(36.dp))
         }
     }
 

@@ -291,6 +291,8 @@ fun TopUpScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
+
+            Spacer(modifier = Modifier.height(36.dp))
         }
     }
 }

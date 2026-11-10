@@ -4,6 +4,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,6 +96,7 @@ import com.example.ui.theme.TextSecondaryMuted
 @Composable
 fun AdminDashboardScreen(
     currentWithdrawFee: String = "3000",
+    currentRcbApiKey: String = "rcb_live_usr_ffbffccebf4e",
     withdrawalRequests: List<TransactionEntity>,
     allUsers: List<UserEntity>,
     pendingKycUsers: List<UserEntity>,
@@ -112,12 +115,14 @@ fun AdminDashboardScreen(
     onApproveBankChange: (requestId: String) -> Unit = {},
     onRejectBankChange: (requestId: String, reason: String) -> Unit = { _, _ -> },
     onSaveWithdrawFee: (newFee: Double) -> Unit,
+    onSaveRcbApiKey: (newApiKey: String) -> Unit = {},
     onAddBanner: (title: String, subtitle: String, badge: String, colorHex: String) -> Unit = { _, _, _, _ -> },
     onDeleteBanner: (bannerId: String) -> Unit = {}
 ) {
-    // 0: Verifikasi Rekening Baru (KYC), 1: KivoPay+ Upgrade, 2: Ubah Rekening, 3: Penarikan, 4: Kelola Banner, 5: Pengguna, 6: Biaya, 7: Audit
+    // 0: Verifikasi Rekening Baru (KYC), 1: KivoPay+ Upgrade, 2: Ubah Rekening, 3: Penarikan, 4: Kelola Banner, 5: Pengguna, 6: Biaya & Gateway, 7: Audit
     var activeAdminTab by remember { mutableStateOf(0) }
     var feeInput by remember { mutableStateOf(currentWithdrawFee) }
+    var rcbApiKeyInput by remember(currentRcbApiKey) { mutableStateOf(currentRcbApiKey) }
 
     // Dialog state for rejecting KivoPay+
     var selectedUserForKivoPlusReject by remember { mutableStateOf<UserEntity?>(null) }
@@ -744,7 +749,7 @@ fun AdminDashboardScreen(
                                                 ) {
                                                     Icon(Icons.Default.Check, contentDescription = "Setujui", modifier = Modifier.size(16.dp), tint = Color.White)
                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Setujui", fontSize = 12.sp, color = Color.White)
+                                                    Text("Kirim via RCB Pay", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                                 }
                                             }
                                         }
@@ -980,11 +985,12 @@ fun AdminDashboardScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
                             .padding(20.dp)
                     ) {
                         Text("Pengaturan Biaya Penarikan (Withdraw Fee)", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
                         Text(
-                            text = "Konfigurasi biaya layanan flat per penarikan dana bank (Default Rp 3.000).",
+                            text = "Konfigurasi biaya layanan flat per penarikan dana bank (Default Rp 3.000). Selisih biaya ini menjadi keuntungan KivoPay.",
                             fontSize = 12.sp,
                             color = TextSecondaryMuted,
                             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -1005,7 +1011,7 @@ fun AdminDashboardScreen(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                         )
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
                             onClick = {
@@ -1023,6 +1029,80 @@ fun AdminDashboardScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Simpan Biaya Penarikan Baru", fontWeight = FontWeight.Bold, color = Color.White)
                         }
+
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        // Dedicated RCB Pay Gateway Live Configuration Card
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, PrimaryBlue.copy(alpha = 0.35f))
+                        ) {
+                            Column(modifier = Modifier.padding(18.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Gateway RCB Pay API", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = EmeraldSuccess.copy(alpha = 0.12f)
+                                    ) {
+                                        Text(
+                                            text = "TERHUBUNG LIVE",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = EmeraldSuccess,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+
+                                Text(
+                                    text = "Base URL: https://api.ragaciptabersama.web.id/api/",
+                                    fontSize = 11.sp,
+                                    color = TextSecondaryMuted,
+                                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp)
+                                )
+
+                                Text("API Key Produksi (x-api-key):", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextPrimaryDark)
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                OutlinedTextField(
+                                    value = rcbApiKeyInput,
+                                    onValueChange = { rcbApiKeyInput = it },
+                                    textStyle = kivoInputTextStyle(),
+                                    colors = kivoTextFieldColors(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("admin_rcb_api_key_input"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    singleLine = true
+                                )
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                Button(
+                                    onClick = {
+                                        onSaveRcbApiKey(rcbApiKeyInput.trim())
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(48.dp)
+                                        .testTag("save_rcb_key_button"),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                                ) {
+                                    Icon(Icons.Default.Security, contentDescription = "Simpan Key", tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Simpan & Sinkronkan Kunci RCB", fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(30.dp))
                     }
                 }
 

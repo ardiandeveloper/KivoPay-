@@ -26,13 +26,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -185,18 +190,17 @@ fun QrisScannerScreen(
     val isBalanceSufficient = userAvailableBalance >= amountDouble
     val quickAmounts = listOf(15000.0, 25000.0, 50000.0, 100000.0)
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
             .testTag("qris_scanner_screen")
     ) {
-        // TOP 65%: CAMERA SCANNER AREA
+        // TOP: CAMERA SCANNER AREA (Takes remaining flexible space)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxSize(0.68f)
-                .align(Alignment.TopCenter)
+                .weight(1f)
         ) {
             // Live Camera View or High-Tech Camera Viewfinder Fallback
             if (hasCameraPermission) {
@@ -313,7 +317,8 @@ fun QrisScannerScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 44.dp, start = 16.dp, end = 16.dp),
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -404,11 +409,11 @@ fun QrisScannerScreen(
             }
         }
 
-        // BOTTOM 32%: OVO-STYLE "BISA JUGA PAKAI" CONTAINER
+        // BOTTOM: OVO-STYLE "BISA JUGA PAKAI" CONTAINER
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .align(Alignment.BottomCenter),
+                .wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
             color = CleanWhite,
             shadowElevation = 16.dp
@@ -416,7 +421,8 @@ fun QrisScannerScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 28.dp)
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 18.dp)
             ) {
                 Text(
                     text = "Bisa juga pakai",

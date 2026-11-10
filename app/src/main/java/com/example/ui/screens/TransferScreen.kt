@@ -416,6 +416,8 @@ fun TransferScreen(
             ) {
                 Text("Lanjutkan Transfer", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = CleanWhite)
             }
+
+            Spacer(modifier = Modifier.height(36.dp))
         }
     }
 

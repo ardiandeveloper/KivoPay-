@@ -64,6 +64,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
     val userNotifications by viewModel.userNotifications.collectAsStateWithLifecycle()
     val activeBanners by viewModel.activeBanners.collectAsStateWithLifecycle()
     val withdrawFeeConfig by viewModel.withdrawFeeConfig.collectAsStateWithLifecycle()
+    val rcbApiKeyConfig by viewModel.rcbApiKeyConfig.collectAsStateWithLifecycle()
     val isBalanceHidden by viewModel.isBalanceHidden.collectAsStateWithLifecycle()
     val selectedTransaction by viewModel.selectedTransaction.collectAsStateWithLifecycle()
 
@@ -287,6 +288,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
 
                         AppScreen.ADMIN_DASHBOARD -> AdminDashboardScreen(
                             currentWithdrawFee = withdrawFeeConfig?.value ?: "3000",
+                            currentRcbApiKey = rcbApiKeyConfig?.value ?: "rcb_live_usr_ffbffccebf4e",
                             withdrawalRequests = withdrawalRequests,
                             allUsers = allUsers,
                             pendingKycUsers = pendingKycUsers,
@@ -305,6 +307,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                             onApproveBankChange = { reqId -> viewModel.adminApproveBankChange(reqId) },
                             onRejectBankChange = { reqId, reason -> viewModel.adminRejectBankChange(reqId, reason) },
                             onSaveWithdrawFee = { newFee -> viewModel.updateWithdrawFee(newFee) },
+                            onSaveRcbApiKey = { newKey -> viewModel.updateRcbApiKey(newKey) },
                             onAddBanner = { title, subtitle, badge, color ->
                                 viewModel.adminAddBanner(title, subtitle, badge, color)
                             },

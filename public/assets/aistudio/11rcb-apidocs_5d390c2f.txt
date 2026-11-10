@@ -1,0 +1,279 @@
+Membangun Integrasi Pembayaran dengan RCB Pay API
+RCB Pay API dirancang menggunakan arsitektur REST yang modern dan sangat mudah digunakan. Terima pembayaran QRIS dan Kripto (USDT) secara instan, otomatis, dan terintegrasi.
+
+Introduction
+Selamat datang di dokumentasi resmi PT. Raga Cipta Bersama Developers. API kami menggunakan struktur URL berbasis Resource, selalu menerima request dalam format JSON, dan mengembalikan response dalam format JSON standar.
+
+Base URL (Production)
+https://
+api.ragaciptabersama.web.id/api
+Authentication
+Autentikasi ke RCB API dilakukan menggunakan metode API Keys. Anda harus menyertakan API Key Anda pada setiap *request* melalui Header x-api-key.
+
+API ANDA: 
+
+Amankan API Key Anda!
+API Key memberikan akses penuh untuk membuat transaksi atas nama akun Anda. Jangan pernah membagikan API Key Anda di forum publik, repositori GitHub (kecuali di dalam .env), atau aplikasi client-side (seperti React/Vue di sisi browser).
+
+Pilihan Payment Method (Channels)
+RCB Pay mendukung berbagai metode pembayaran populer. Anda dapat membatasi pilihan pembayaran yang tampil pada halaman checkout dengan menambahkan parameter query methods pada payment_url (contoh: payment_url + "&methods=qris" untuk membatasi hanya QRIS).
+
+Kode Channel	Nama Metode	Kategori
+qris_mdr
+atau QRIS_MDR_STATIS	
+QRIS Direct MDR (Bank BNI Direct)
+🔥 Rekomendasi - Jaringan Ultra-Stabil
+Jaringan Direct Bank BNI dengan tingkat keberhasilan 99.9%, bebas kendala server jam sibuk, settlement otomatis & fee super hemat.
+
+QRIS Direct Bank
+qris	QRIS Dinamis Multi-Bank (Mandiri, BCA, GoPay, OVO, Dana, ShopeePay)	E-Wallet & Scan Bank
+usdt	Kripto USDT (TRC20, ERC20, BEP20, TON, SOL, NEAR)	Stablecoin / Crypto
+va	Semua Virtual Account Bank Terintegrasi (Cooming soon / via Partner)	Transfer Bank
+pulsa	Pulsa Seluler (Telkomsel, XL, Axis, Smartfren, Tri)	Transfer Pulsa
+cimb_niaga_va	CIMB Niaga VA	Transfer Bank (VA)
+bni_va	BNI VA	Transfer Bank (VA)
+sampoerna_va	Sahabat Sampoerna VA	Transfer Bank (VA)
+bnc_va	BNC Bank Neo Commerce VA	Transfer Bank (VA)
+maybank_va	Maybank VA	Transfer Bank (VA)
+permata_va	Permata Bank VA	Transfer Bank (VA)
+atm_bersama_va	ATM Bersama VA	Transfer Bank (VA)
+artha_graha_va	Artha Graha VA	Transfer Bank (VA)
+bri_va	BRI VA	
+
+Integrasi PHP (Source Code Lengkap)
+Berikut adalah contoh source code lengkap untuk membuat tagihan dan menerima webhook sukses menggunakan PHP native.
+
+1. Membuat Tagihan (Create Payment)
+<?php
+// rcb-create-payment.php
+
+// 1. Konfigurasi Kunci
+$apiKey = "rcb_sandbox_test_55a12f990ac841bc82b5"; // Ganti dengan API Key Live di produksi
+$apiUrl = "https://api.ragaciptabersama.web.id/api/gateway/create";
+
+// 2. Payload Data Transaksi
+$payload = [
+    "amount" => 50000,
+    "item_name" => "Topup Diamond Free Fire",
+    "customer_name" => "Rian Hidayat",
+    "customer_email" => "rian@gmail.com",
+    "external_id" => "ORDER-10029" // ID invoice dari database Anda
+];
+
+// 3. Kirim Request via cURL (Kompatibel untuk VPS & Shared Hosting)
+$ch = curl_init($apiUrl);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    "Content-Type: application/json",
+    "x-api-key: " . $apiKey
+]);
+curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+$response = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+curl_close($ch);
+
+// 4. Proses Hasil Response
+if ($httpCode === 200 || $httpCode === 201) {
+    $result = json_decode($response, true);
+    if ($result['success']) {
+        $paymentUrl = $result['data']['payment_url'];
+        $orderId = $result['data']['order_id'];
+        
+        // CONTOH MEMBATASI METODE PEMBAYARAN (QRIS ONLY atau USDT ONLY)
+        // Cukup tambahkan parameter &methods=qris atau &methods=usdt pada URL pembayaran
+        $qrisOnlyUrl = $paymentUrl . "&methods=qris";
+        $usdtOnlyUrl = $paymentUrl . "&methods=usdt";
+        
+        echo "Sukses Membuat Invoice!
+";
+        echo "Order ID RCB: " . $orderId . "
+";
+        echo "Standard Link: <a href='$paymentUrl' target='_blank'>Bayar Sekarang</a>
+";
+        echo "QRIS Only Link: <a href='$qrisOnlyUrl' target='_blank'>Bayar via QRIS Saja</a>
+";
+        echo "USDT Only Link: <a href='$usdtOnlyUrl' target='_blank'>Bayar via USDT Saja</a>
+";
+    } else {
+        echo "Gagal: " . $result['message'];
+    }
+} else {
+    echo "Gagal HTTP Request dengan status code: " . $httpCode;
+    echo " Response: " . $response;
+}
+?>
+2. Menerima Notifikasi Pembayaran (Webhook Callback)
+Endpoint callback Anda harus memvalidasi data signature untuk memastikan keamanan data sebelum memperbarui status pesanan di database lokal.
+
+<?php
+// rcb-callback-handler.php
+
+// Kunci API Key yang sama dengan saat pembuatan tagihan
+$apiKey = "rcb_sandbox_test_55a12f990ac841bc82b5";
+
+// 1. Ambil payload JSON dari server RCB
+$rawPayload = file_get_contents('php://input');
+$data = json_decode($rawPayload, true);
+
+if (!$data) {
+    http_response_code(400);
+    echo "Invalid JSON payload";
+    exit;
+}
+
+$orderId = $data['order_id'];
+$externalId = $data['external_id'];
+$status = $data['status'];
+$signatureReceived = $data['signature'];
+
+// 2. Hitung signature pembanding
+// Rumus: SHA256(order_id + status + api_key)
+$signatureLocal = hash('sha256', $orderId . $status . $apiKey);
+
+// 3. Cocokkan Signature
+if ($signatureReceived === $signatureLocal) {
+    // Signature Valid!
+    if ($status === 'PAID') {
+        // Jalankan logika lunas di database Anda
+        // Contoh: update_order_status_to_paid($externalId);
+        
+        // BERIKAN RESPONSE 200 OK UNTUK MENCEGAH RETRY WEBHOOK
+        http_response_code(200);
+        echo "OK";
+    } else {
+        echo "Status pending atau gagal: " . $status;
+    }
+} else {
+    // Signature salah! Kemungkinan palsu / manipulasi data
+    http_response_code(403);
+    echo "Forbidden: Signature Mismatch";
+}
+
+Menerbitkan Tagihan (QRIS & USDT)
+POST
+/gateway/create
+Endpoint ini digunakan untuk membuat URL tagihan yang mendukung pembayaran QRIS dinamis dan transfer Kripto (USDT) secara instan. Sistem kami akan otomatis menyesuaikan nominal tagihan dengan kode unik dan mengelola konversi USDT agar transaksi bisa tervalidasi secara otomatis.
+
+Rekomendasi Utama: QRIS Direct MDR (Bank BNI Direct)
+Jaringan Ultra-Stabil
+Gunakan "qris_mode": "mdr" atau "payment_type": "QRIS_MDR_STATIS" untuk menggunakan jalur **Direct Bank BNI**. Jaringan ini terhubung langsung ke Switch Banking BNI dengan garansi *uptime* 99.9%, terhindar dari keterlambatan di jam sibuk, dan didukung callback otomatis perbankan.
+
+ Settlement: H+1 (Cair Besok Hari)
+ Kode Unik Presisi: Acak 1 – 150
+Catatan Nama & Kota Merchant: Pada jalur QRIS MDR (BNI Direct), nama merchant dan kota tercetak resmi mengikuti Lisensi Terdaftar Bank BNI dan tidak dapat di-custom. Jika Anda membutuhkan nama merchant/toko custom milik Anda sendiri di atas QRIS, silakan gunakan mode "qris_mode": "rcb_bisnis".
+Penting untuk Pembayaran USDT: Jika pelanggan melakukan transfer dari Exchange (seperti Binance, Indodax, Bybit), ingatkan pelanggan untuk memastikan nominal yang sampai / diterima (Receive Amount) persis sama dengan usdt_amount setelah terpotong biaya jaringan exchange (network fee).
+Pilihan Integrasi Pembayaran
+Opsi 1: Redireksi (Halaman RCB)
+Arahkan pelanggan langsung ke payment_url yang dikembalikan oleh API. Pelanggan akan diarahkan ke halaman checkout resmi RCB Pay yang lengkap dengan QRIS, instruksi transfer, dan countdown timer.
+
+Sangat Mudah & Praktis
+Opsi 2: Custom Tampilan (Modal/UI)
+Tampilkan QR Code langsung di website Anda (seperti popup/modal custom) menggunakan data qris_url langsung pada tag <img src="qris_url"> atau gunakan raw payload string qris_string jika menggunakan generator QR JS (seperti qrcode.js).
+
+⚠️ Peringatan Penting: Jangan memasukkan payment_url ke dalam generator QR Code JS karena payment_url adalah link web checkout, bukan data bayar QRIS.
+Sesuai Brand/UI Sendiri
+Body Parameters
+Parameter	Keterangan
+amount
+Integer â€¢ Required
+Nominal tagihan murni (tanpa kode unik). Minimal Rp 1.000.
+item_name
+String â€¢ Optional
+Nama barang atau jasa yang dibeli (Max 50 karakter).
+external_id
+String â€¢ Optional
+ID Referensi internal pesanan dari database/sistem Anda (contoh: INV-992). Sangat disarankan untuk mempermudah rekonsiliasi.
+customer_name
+String â€¢ Optional
+Nama pelanggan.
+customer_email
+String • Optional
+Email pelanggan (berguna untuk pengiriman bukti pembayaran otomatis kelak).
+qris_mode
+String • Optional
+Pilihan mode QRIS & bank jaringan yang digunakan:
+"mdr": QRIS Direct MDR (Bank BNI) — Menghasilkan QRIS Dinamis BNI via RadBiz MDR. Status transaksi otomatis berubah menjadi PAID via webhook instan saat dibayar. Model settlement T+1 (holding 24 jam).
+"rcb_bisnis": QRIS RCB Bisnis (Bank Mandiri) — Menghasilkan QRIS Bank Mandiri dengan kode unik, dicek via mutasi Livin/MacroDroid. Model settlement instan T+0.
+⚡ Master Switch: Jika akun Anda disetel ke mode QRIS MDR di Dashboard Merchant, semua transaksi API otomatis diterbitkan sebagai QRIS Bank BNI Dinamis, sekalipun bot Anda mengirimkan parameter legacy rcb_bisnis.
+payment_type
+String • Optional
+Tipe spesifik pembayaran. Nilai yang didukung: "QRIS_MDR_DYNAMIC" (Bank BNI Dinamis upstream RadBiz - Rekomendasi), "QRIS_MDR_STATIS" (Bank BNI Statis), atau "QRIS" (Bank Mandiri RCB Bisnis).
+allowed_methods
+String • Optional
+Daftar metode pembayaran yang diizinkan untuk transaksi ini, dipisahkan dengan koma (contoh: qris_mdr,usdt atau qris,usdt). Jika tidak diisi, semua metode pembayaran yang aktif di Dashboard Developer Anda akan tersedia.
+callback_url
+String (URL) • Optional
+URL Webhook Khusus Transaksi Ini (Multi-Website Support). Jika Anda memiliki banyak toko atau website berbeda dengan 1 akun RCB, sertakan URL webhook spesifik website ini (contoh: https://toko-a.com/webhook). Sistem akan langsung mengirim notifikasi sukses ke URL ini, mengabaikan URL webhook default yang disetel di Dashboard.
+
+Check QRIS Status
+Endpoint ini digunakan untuk melakukan pengecekan status transaksi secara manual apabila Webhook Anda gagal menerima notifikasi dari server kami. Anda hanya memerlukan order_id yang didapatkan saat Create QRIS.
+
+Endpoint URL
+GET
+https://api.ragaciptabersama.web.id/api/payment-status/{order_id}
+Query Parameters
+order_id
+Required
+string
+ID Pesanan internal dari RCB yang diterima saat memanggil Create QRIS (dimulai dengan "API-").
+
+cURL Request
+curl -X GET \
+  'https://api.ragaciptabersama.web.id/api/payment-status/API-XYZ123ABC' \
+  -H 'x-api-key: YOUR_SECRET_API_KEY'
+200 OK Response
+{
+  "success": true,
+  "data": {
+    "order_id": "API-XYZ123ABC",
+    "external_id": "ORDER-992",
+    "status": "PAID",
+    "harga": 50000,
+    "total_amount": 50134,
+    "payment_type": "QRIS",
+    "paid_at": "2026-05-06 15:05:12",
+    "created_at": "2026-05-06 14:30:00"
+  }
+}
+POST
+Webhook Callback (Notifikasi)
+Setelah pelanggan Anda melakukan pembayaran (baik QRIS maupun USDT) dan dana berhasil divalidasi, server RCB akan secara otomatis mengirimkan notifikasi (Callback) ke URL Webhook yang Anda atur di Dashboard Mitra.
+
+Request ini akan dikirim menggunakan method POST dengan format application/json. Selain di body, signature juga dikirimkan melalui header X-RCB-Signature.
+
+Payload JSON yang Dikirim Server RCB
+{
+  "order_id": "API-XYZ123ABC",
+  "external_id": "ORDER-992",
+  "status": "PAID",
+  "amount": 50000,
+  "total_amount": 50134,
+  "payment_type": "USDT",
+  "paid_at": "2026-05-06T15:05:12.000Z",
+  "signature": "b6a4a9c8f1..."
+}
+ Penting:
+Server Anda wajib membalas notifikasi ini dengan HTTP Status 200 OK. Jika tidak membalas dengan 200, RCB akan menganggap Webhook gagal dan mungkin mengulang pengiriman (retry) beberapa kali.
+
+  "total_deducted": 152500,
+  "source_account": "REKENING_PENAMPUNG_RCB",
+  "remark": "Pencairan Komisi | Ref: 20260928102345",
+  "created_at": "2026-09-28 10:20:00",
+  "completed_at": "2026-09-28 10:25:00",
+  "signature": "7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069"
+}
+Error Handling
+API kami menggunakan HTTP status code standar untuk mengindikasikan status sebuah request. Kode 2xx berarti sukses, kode 4xx berarti ada kesalahan pada data yang Anda kirim, dan 5xx berarti ada gangguan pada server kami.
+
+Code	Keterangan
+200	OK. Request berhasil diproses.
+400	Bad Request. Parameter yang dikirim tidak sesuai (misal: nominal kosong atau di bawah minimum).
+401	Unauthorized. API Key tidak ditemukan atau salah.
+405	Method Not Allowed. Anda menggunakan metode HTTP yang salah (harus POST).
+500	Server Error. Terdapat kendala di sistem utama RCB. Tim engineer kami akan segera mengatasinya.
