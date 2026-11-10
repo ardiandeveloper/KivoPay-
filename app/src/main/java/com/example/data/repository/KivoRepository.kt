@@ -63,6 +63,9 @@ class KivoRepository(private val database: KivoDatabase) {
                 saldoHold = 0.0,
                 isKycVerified = true,
                 kycStatus = KycStatus.APPROVED,
+                isKivoPlus = true,
+                kivoPlusStatus = com.example.data.model.KivoPlusStatus.APPROVED,
+                kivoPlusNik = "3171010101900001",
                 userBankName = "Bank Central Asia (BCA)",
                 userBankAccountNumber = "1234567890",
                 userBankAccountHolder = "KivoPay Corporate",
@@ -71,7 +74,15 @@ class KivoRepository(private val database: KivoDatabase) {
             userDao.insertUser(adminUser)
         } else {
             // Strictly enforce official password KJq4EaCSvjNZxz4 and PIN 224461
-            userDao.updateUser(existingAdmin.copy(password = "KJq4EaCSvjNZxz4", pin = "224461", isAdmin = true))
+            userDao.updateUser(
+                existingAdmin.copy(
+                    password = "KJq4EaCSvjNZxz4",
+                    pin = "224461",
+                    isAdmin = true,
+                    isKivoPlus = true,
+                    kivoPlusStatus = com.example.data.model.KivoPlusStatus.APPROVED
+                )
+            )
         }
 
         // Seed Admin Config: Withdraw Fee Rp 3.000
@@ -275,6 +286,16 @@ class KivoRepository(private val database: KivoDatabase) {
         val serviceFee = 0.0 // Promo free fee
         val totalAmount = amount + serviceFee
 
+        // Limit calculation: Rp 4.000.000 for regular, Rp 30.000.000 for KivoPay+
+        val userLimit = if (user.isKivoPlus) 30000000.0 else 4000000.0
+        val remainingCapacity = maxOf(0.0, userLimit - user.saldoAvailable)
+
+        val creditToAvailable = minOf(amount, remainingCapacity)
+        val creditToHold = amount - creditToAvailable
+
+        val newAvailable = user.saldoAvailable + creditToAvailable
+        val newHold = user.saldoHold + creditToHold
+
         val txId = "KV-TOP-" + System.currentTimeMillis().toString().takeLast(6) + Random.nextInt(100, 999)
         val transaction = TransactionEntity(
             transactionId = txId,
@@ -290,18 +311,28 @@ class KivoRepository(private val database: KivoDatabase) {
         )
 
         // Idempotent balance update in database
-        val newAvailable = user.saldoAvailable + amount
-        userDao.updateBalances(userId, newAvailable, user.saldoHold)
+        userDao.updateBalances(userId, newAvailable, newHold)
         transactionDao.insertTransaction(transaction)
 
-        notificationDao.insertNotification(
-            NotificationEntity(
-                userId = userId,
-                title = "Top Up Berhasil! 💰",
-                message = "Saldo sebesar Rp ${formatRupiah(amount)} via $paymentMethod telah ditambahkan ke akun Anda.",
-                type = "TRANSACTION"
+        if (creditToHold > 0) {
+            notificationDao.insertNotification(
+                NotificationEntity(
+                    userId = userId,
+                    title = "Sebagian Saldo Ditahan! ⚠️",
+                    message = "Top Up Rp ${formatRupiah(amount)} melebihi batas limit ${if (user.isKivoPlus) "Rp 30.000.000" else "Rp 4.000.000"}. Saldo masuk ke Saldo Tertahan sebesar Rp ${formatRupiah(creditToHold)}. Upgrade ke KivoPay+ untuk membuka limit hingga Rp 30 Juta!",
+                    type = "TRANSACTION"
+                )
             )
-        )
+        } else {
+            notificationDao.insertNotification(
+                NotificationEntity(
+                    userId = userId,
+                    title = "Top Up Berhasil! 💰",
+                    message = "Saldo sebesar Rp ${formatRupiah(amount)} via $paymentMethod telah ditambahkan ke akun Anda.",
+                    type = "TRANSACTION"
+                )
+            )
+        }
 
         return ResultState.Success(transaction)
     }
@@ -342,9 +373,16 @@ class KivoRepository(private val database: KivoDatabase) {
             val recipientUser = userDao.getUserByAccountId(destination) ?: userDao.getUserByPhone(destination)
             if (recipientUser != null) {
                 recipientName = recipientUser.fullName
-                // Credit peer recipient balance
-                val newRecipientAvailable = recipientUser.saldoAvailable + amount
-                userDao.updateBalances(recipientUser.id, newRecipientAvailable, recipientUser.saldoHold)
+
+                // Recipient limit check: Rp 4M regular vs Rp 30M KivoPay+
+                val recLimit = if (recipientUser.isKivoPlus) 30000000.0 else 4000000.0
+                val recCapacity = maxOf(0.0, recLimit - recipientUser.saldoAvailable)
+                val recCreditAvailable = minOf(amount, recCapacity)
+                val recCreditHold = amount - recCreditAvailable
+
+                val newRecipientAvailable = recipientUser.saldoAvailable + recCreditAvailable
+                val newRecipientHold = recipientUser.saldoHold + recCreditHold
+                userDao.updateBalances(recipientUser.id, newRecipientAvailable, newRecipientHold)
 
                 // Insert recipient incoming transaction
                 val inTxId = "KV-INC-" + System.currentTimeMillis().toString().takeLast(6) + Random.nextInt(100, 999)
@@ -366,14 +404,25 @@ class KivoRepository(private val database: KivoDatabase) {
                     )
                 )
 
-                notificationDao.insertNotification(
-                    NotificationEntity(
-                        userId = recipientUser.id,
-                        title = "Uang Masuk Rp ${formatRupiah(amount)} 💸",
-                        message = "Anda menerima transfer dari ${user.fullName} (${user.accountId}).",
-                        type = "TRANSACTION"
+                if (recCreditHold > 0) {
+                    notificationDao.insertNotification(
+                        NotificationEntity(
+                            userId = recipientUser.id,
+                            title = "Transfer Masuk (Saldo Ditahan) ⚠️",
+                            message = "Transfer Rp ${formatRupiah(amount)} dari ${user.fullName} melebihi limit Rp 4 Juta. Sebesar Rp ${formatRupiah(recCreditHold)} masuk ke Saldo Tertahan. Upgrade KivoPay+ untuk mencairkannya!",
+                            type = "TRANSACTION"
+                        )
                     )
-                )
+                } else {
+                    notificationDao.insertNotification(
+                        NotificationEntity(
+                            userId = recipientUser.id,
+                            title = "Transfer Masuk Berhasil! 💸",
+                            message = "Anda menerima transfer Rp ${formatRupiah(amount)} dari ${user.fullName}.",
+                            type = "TRANSACTION"
+                        )
+                    )
+                }
             }
         }
 
@@ -818,6 +867,130 @@ class KivoRepository(private val database: KivoDatabase) {
             )
         )
         return ResultState.Success("Password berhasil diubah")
+    }
+
+    // --- KivoPay+ Tier Upgrade Methods ---
+
+    fun getPendingKivoPlusUsersFlow(): Flow<List<UserEntity>> {
+        return userDao.getPendingKivoPlusUsersFlow()
+    }
+
+    suspend fun submitKivoPlusUpgrade(
+        userId: String,
+        nik: String,
+        ktpUri: String,
+        selfieUri: String
+    ): ResultState<String> {
+        val user = userDao.getUserById(userId) ?: return ResultState.Error("Pengguna tidak ditemukan")
+        if (nik.length != 16) {
+            return ResultState.Error("NIK harus tepat 16 digit sesuai e-KTP")
+        }
+        if (ktpUri.isBlank() || selfieUri.isBlank()) {
+            return ResultState.Error("Wajib mengunggah foto e-KTP dan foto selfie memegang e-KTP melalui kamera")
+        }
+
+        val updatedUser = user.copy(
+            kivoPlusNik = nik.trim(),
+            kivoPlusKtpUri = ktpUri,
+            kivoPlusSelfieUri = selfieUri,
+            kivoPlusStatus = com.example.data.model.KivoPlusStatus.PENDING_VERIFICATION,
+            kivoPlusRejectionReason = "",
+            kivoPlusRequestedAt = System.currentTimeMillis()
+        )
+        userDao.updateUser(updatedUser)
+
+        notificationDao.insertNotification(
+            NotificationEntity(
+                userId = userId,
+                title = "Pengajuan KivoPay+ Diproses 🚀",
+                message = "Pengajuan upgrade akun KivoPay+ Anda sedang diverifikasi oleh Tim KivoPay. Dokumen e-KTP Anda sedang ditinjau.",
+                type = "SYSTEM"
+            )
+        )
+
+        auditLogDao.insertAuditLog(
+            AuditLogEntity(
+                adminEmail = "system@kivopay.id",
+                action = "SUBMIT_KIVOPLUS",
+                details = "Pengguna ${user.fullName} (${user.email}) mengajukan upgrade KivoPay+ dengan NIK $nik."
+            )
+        )
+
+        return ResultState.Success("Pengajuan KivoPay+ berhasil dikirim! Mohon tunggu persetujuan Admin.")
+    }
+
+    suspend fun adminApproveKivoPlus(adminEmail: String, userId: String): ResultState<String> {
+        val user = userDao.getUserById(userId) ?: return ResultState.Error("Pengguna tidak ditemukan")
+
+        // Unlock held balance up to new limit of Rp 30.000.000
+        val newLimit = 30000000.0
+        val totalCurrentAvailable = user.saldoAvailable
+        val remainingCapacity = maxOf(0.0, newLimit - totalCurrentAvailable)
+        val releasedFromHold = minOf(user.saldoHold, remainingCapacity)
+        val newAvailable = totalCurrentAvailable + releasedFromHold
+        val newHold = user.saldoHold - releasedFromHold
+
+        userDao.updateKivoPlusStatus(
+            userId = userId,
+            isPlus = true,
+            status = com.example.data.model.KivoPlusStatus.APPROVED,
+            reason = ""
+        )
+        userDao.updateBalances(userId, newAvailable, newHold)
+
+        val releaseMsg = if (releasedFromHold > 0) {
+            " Saldo tertahan sebesar Rp ${formatRupiah(releasedFromHold)} telah otomatis dicairkan ke saldo aktif Anda!"
+        } else ""
+
+        notificationDao.insertNotification(
+            NotificationEntity(
+                userId = userId,
+                title = "Upgrade KivoPay+ Disetujui! 🌟",
+                message = "Selamat! Akun Anda kini berstatus KivoPay+. Limit saldo & transaksi Anda meningkat menjadi Rp 30.000.000.$releaseMsg",
+                type = "SYSTEM"
+            )
+        )
+
+        auditLogDao.insertAuditLog(
+            AuditLogEntity(
+                adminEmail = adminEmail,
+                action = "APPROVE_KIVOPLUS",
+                details = "Admin menyetujui upgrade KivoPay+ untuk ${user.fullName} (${user.email}). NIK: ${user.kivoPlusNik}. Saldo dicairkan: Rp ${formatRupiah(releasedFromHold)}."
+            )
+        )
+
+        return ResultState.Success("Upgrade KivoPay+ berhasil disetujui. Limit Rp 30.000.000 kini aktif.")
+    }
+
+    suspend fun adminRejectKivoPlus(adminEmail: String, userId: String, reason: String): ResultState<String> {
+        val user = userDao.getUserById(userId) ?: return ResultState.Error("Pengguna tidak ditemukan")
+        val finalReason = if (reason.isBlank()) "Foto e-KTP buram / NIK tidak cocok dengan data pengguna" else reason.trim()
+
+        userDao.updateKivoPlusStatus(
+            userId = userId,
+            isPlus = false,
+            status = com.example.data.model.KivoPlusStatus.REJECTED,
+            reason = finalReason
+        )
+
+        notificationDao.insertNotification(
+            NotificationEntity(
+                userId = userId,
+                title = "Upgrade KivoPay+ Ditolak ⚠️",
+                message = "Pengajuan KivoPay+ Anda belum disetujui. Alasan: $finalReason. Silakan ajukan ulang dokumen e-KTP Anda.",
+                type = "SYSTEM"
+            )
+        )
+
+        auditLogDao.insertAuditLog(
+            AuditLogEntity(
+                adminEmail = adminEmail,
+                action = "REJECT_KIVOPLUS",
+                details = "Admin menolak upgrade KivoPay+ untuk ${user.fullName} (${user.email}). Alasan: $finalReason"
+            )
+        )
+
+        return ResultState.Success("Pengajuan KivoPay+ ditolak dengan alasan yang tercatat.")
     }
 
     suspend fun markNotificationsRead(userId: String) {

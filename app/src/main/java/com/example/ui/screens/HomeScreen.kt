@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.ReceiptLong
@@ -123,6 +125,7 @@ fun HomeScreen(
     onNavigatePayment: () -> Unit,
     onNavigatePaymentWithCategory: (String) -> Unit = {},
     onNavigateQris: () -> Unit,
+    onNavigateKivoPlus: () -> Unit = {},
     onNavigateSettings: () -> Unit,
     onSelectTransaction: (TransactionEntity) -> Unit,
     onShowToast: (String) -> Unit
@@ -145,6 +148,54 @@ fun HomeScreen(
             }
         }
 
+        // Held Balance Alert (Saldo Tertahan melebihi limit Rp 4 Juta)
+        if (user != null && user.saldoHold > 0 && !user.isKivoPlus) {
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                        .clickable { onNavigateKivoPlus() }
+                        .testTag("saldo_hold_alert_card"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                    border = BorderStroke(1.dp, Color(0xFFF59E0B))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(Color(0xFFF59E0B), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Lock, contentDescription = "Hold", tint = Color.White, modifier = Modifier.size(22.dp))
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Saldo Tertahan: Rp ${formatCurrency(user.saldoHold)}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = Color(0xFF92400E)
+                            )
+                            Text(
+                                text = "Batas saldo akun reguler maksimal Rp 4 Juta. Upgrade ke KivoPay+ untuk mencairkan saldo tertahan ini & nikmati limit hingga Rp 30 Juta!",
+                                fontSize = 11.sp,
+                                color = Color(0xFFB45309),
+                                lineHeight = 15.sp,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Default.ChevronRight, contentDescription = "Upgrade", tint = Color(0xFF92400E))
+                    }
+                }
+            }
+        }
+
         // Balance Card Header
         item {
             KivoBalanceCard(
@@ -155,6 +206,7 @@ fun HomeScreen(
                 onTransferClick = onNavigateTransfer,
                 onWithdrawClick = onNavigateWithdraw,
                 onHistoryClick = onNavigateHistory,
+                onUpgradeKivoPlus = onNavigateKivoPlus,
                 onCopyAccount = { phoneId ->
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     val clip = ClipData.newPlainText("ID KivoPay", phoneId)
@@ -497,10 +549,12 @@ fun KivoBalanceCard(
     onTransferClick: () -> Unit,
     onWithdrawClick: () -> Unit,
     onHistoryClick: () -> Unit,
+    onUpgradeKivoPlus: () -> Unit = {},
     onCopyAccount: (String) -> Unit
 ) {
     val availableBalance = user?.saldoAvailable ?: 0.0
     val holdBalance = user?.saldoHold ?: 0.0
+    val isPlus = user?.isKivoPlus == true
 
     // High-contrast clean white and blue gradient card
     Card(
@@ -516,13 +570,13 @@ fun KivoBalanceCard(
                 .fillMaxWidth()
                 .background(
                     brush = Brush.linearGradient(
-                        colors = listOf(PrimaryBlue, PrimaryBlueDark)
+                        colors = if (isPlus) listOf(Color(0xFF0F2B5C), Color(0xFF1D61E7)) else listOf(PrimaryBlue, PrimaryBlueDark)
                     )
                 )
                 .padding(20.dp)
         ) {
             Column {
-                // Header: Account Number + Hide Toggle
+                // Header: Account Number + Tier Badge + Hide Toggle
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -530,7 +584,7 @@ fun KivoBalanceCard(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val userPhoneId = user?.phoneNumber?.ifBlank { "081298765432" } ?: "081298765432"
                         Text(
@@ -547,6 +601,21 @@ fun KivoBalanceCard(
                                 .size(14.dp)
                                 .clickable { onCopyAccount(userPhoneId) }
                         )
+
+                        // KivoPay+ Tier Badge
+                        Surface(
+                            modifier = Modifier.clickable { onUpgradeKivoPlus() },
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isPlus) Color(0xFFFFD700) else Color(0x33FFFFFF)
+                        ) {
+                            Text(
+                                text = if (isPlus) "KivoPay+ 🌟" else "Upgrade Plus 🚀",
+                                color = if (isPlus) Color(0xFF0F2B5C) else Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
 
                     IconButton(

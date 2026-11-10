@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -78,6 +79,7 @@ fun ProfilScreen(
     user: UserEntity?,
     onNavigateAdmin: () -> Unit,
     onNavigateChangeBank: () -> Unit = {},
+    onNavigateKivoPlus: () -> Unit = {},
     onLogout: () -> Unit,
     onUpdatePin: (String, String) -> Unit,
     onUpdatePassword: (String, String) -> Unit,
@@ -259,6 +261,15 @@ fun ProfilScreen(
                         onClick = onNavigateAdmin
                     )
                 }
+
+                // KivoPay+ Tier Upgrade Row
+                ProfileSettingRow(
+                    title = if (user?.isKivoPlus == true) "KivoPay+ (Aktif)" else "Upgrade ke KivoPay+",
+                    subtitle = if (user?.isKivoPlus == true) "Batas limit Rp 30.000.000 aktif" else "Tingkatkan limit s/d Rp 30 Juta & verifikasi e-KTP",
+                    icon = Icons.Default.Star,
+                    iconColor = if (user?.isKivoPlus == true) Color(0xFFD97706) else PrimaryBlue,
+                    onClick = onNavigateKivoPlus
+                )
 
                 ProfileSettingRow(
                     title = "Ubah 6-Digit PIN Transaksi",

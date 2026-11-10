@@ -37,6 +37,7 @@ enum class AppScreen {
     PAYMENT,
     QRIS_SCANNER,
     CHANGE_BANK,
+    KIVOPLUS_UPGRADE,
     ADMIN_DASHBOARD,
     RECEIPT_DETAIL
 }
@@ -44,6 +45,11 @@ enum class AppScreen {
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: KivoRepository
     private val sessionManager = SessionManager(application)
+    private val networkMonitor = com.example.ui.util.NetworkMonitor(application)
+
+    // Internet connectivity state
+    val isNetworkConnected: StateFlow<Boolean> = networkMonitor.isConnectedFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, networkMonitor.isCurrentlyConnected())
 
     // Current screen starts with SPLASH
     private val _currentScreen = MutableStateFlow(AppScreen.SPLASH)
@@ -78,13 +84,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val savedUserId = sessionManager.getValidSessionUserId()
             _currentUserId.value = savedUserId
 
-            // Artificial short delay for splash presentation & animation
-            delay(1800)
+            // Official requested duration: exactly 10 seconds (10.000 ms)
+            delay(10000L)
             if (savedUserId != null) {
                 _currentScreen.value = AppScreen.MAIN
             } else {
                 _currentScreen.value = AppScreen.AUTH
             }
+        }
+    }
+
+    fun checkNetworkRetry() {
+        val connected = networkMonitor.isCurrentlyConnected()
+        if (connected) {
+            showToast("Koneksi internet terhubung kembali!")
+        } else {
+            showToast("Masih belum terhubung ke internet. Silakan cek data seluler / Wi-Fi.")
         }
     }
 
@@ -115,6 +130,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val pendingKycUsers: StateFlow<List<UserEntity>> = repository.getPendingKycUsersFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val pendingKivoPlusUsers: StateFlow<List<UserEntity>> = repository.getPendingKivoPlusUsersFlow()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val withdrawalRequests: StateFlow<List<TransactionEntity>> = repository.getWithdrawalsFlow()
@@ -484,6 +502,49 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val adminUser = currentUser.value ?: return
         viewModelScope.launch {
             when (val res = repository.adminRejectBankChange(adminUser.email, requestId, reason)) {
+                is ResultState.Success -> showToast(res.data)
+                is ResultState.Error -> showToast(res.message)
+                else -> {}
+            }
+        }
+    }
+
+    // --- KivoPay+ Tier Upgrade ViewModel Actions ---
+
+    fun submitKivoPlusUpgrade(
+        nik: String,
+        ktpUri: String,
+        selfieUri: String,
+        onSuccess: () -> Unit
+    ) {
+        val userId = _currentUserId.value ?: return
+        viewModelScope.launch {
+            when (val res = repository.submitKivoPlusUpgrade(userId, nik, ktpUri, selfieUri)) {
+                is ResultState.Success -> {
+                    showToast(res.data)
+                    onSuccess()
+                }
+                is ResultState.Error -> showToast(res.message)
+                else -> {}
+            }
+        }
+    }
+
+    fun adminApproveKivoPlus(userId: String) {
+        val adminUser = currentUser.value ?: return
+        viewModelScope.launch {
+            when (val res = repository.adminApproveKivoPlus(adminUser.email, userId)) {
+                is ResultState.Success -> showToast(res.data)
+                is ResultState.Error -> showToast(res.message)
+                else -> {}
+            }
+        }
+    }
+
+    fun adminRejectKivoPlus(userId: String, reason: String) {
+        val adminUser = currentUser.value ?: return
+        viewModelScope.launch {
+            when (val res = repository.adminRejectKivoPlus(adminUser.email, userId, reason)) {
                 is ResultState.Success -> showToast(res.data)
                 is ResultState.Error -> showToast(res.message)
                 else -> {}

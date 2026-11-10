@@ -27,6 +27,8 @@ import com.example.ui.screens.AktivitasScreen
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.ChangeBankAccountScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.KivoPlusScreen
+import com.example.ui.screens.NoInternetScreen
 import com.example.ui.screens.NotifikasiScreen
 import com.example.ui.screens.PembayaranScreen
 import com.example.ui.screens.ProfilScreen
@@ -55,6 +57,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
+    val isNetworkConnected by viewModel.isNetworkConnected.collectAsStateWithLifecycle()
     val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
     val userTransactions by viewModel.userTransactions.collectAsStateWithLifecycle()
@@ -68,6 +71,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
     val allTransactions by viewModel.allTransactions.collectAsStateWithLifecycle()
     val allUsers by viewModel.allUsers.collectAsStateWithLifecycle()
     val pendingKycUsers by viewModel.pendingKycUsers.collectAsStateWithLifecycle()
+    val pendingKivoPlusUsers by viewModel.pendingKivoPlusUsers.collectAsStateWithLifecycle()
     val withdrawalRequests by viewModel.withdrawalRequests.collectAsStateWithLifecycle()
     val auditLogs by viewModel.auditLogs.collectAsStateWithLifecycle()
     val userBankChangeRequests by viewModel.userBankChangeRequests.collectAsStateWithLifecycle()
@@ -89,6 +93,16 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
         BackHandler {
             viewModel.navigateTo(AppScreen.MAIN)
         }
+    }
+
+    // If internet connection is lost, display dedicated No Internet screen
+    if (!isNetworkConnected && currentScreen != AppScreen.SPLASH) {
+        NoInternetScreen(
+            onRetry = {
+                viewModel.checkNetworkRetry()
+            }
+        )
+        return
     }
 
     when (currentScreen) {
@@ -178,6 +192,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                                         viewModel.navigateTo(AppScreen.PAYMENT)
                                     },
                                     onNavigateQris = { viewModel.navigateTo(AppScreen.QRIS_SCANNER) },
+                                    onNavigateKivoPlus = { viewModel.navigateTo(AppScreen.KIVOPLUS_UPGRADE) },
                                     onNavigateSettings = { viewModel.setActiveTab(4) },
                                     onSelectTransaction = { tx -> viewModel.viewReceipt(tx) },
                                     onShowToast = { msg -> viewModel.showToast(msg) }
@@ -207,6 +222,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                                     user = currentUser,
                                     onNavigateAdmin = { viewModel.navigateTo(AppScreen.ADMIN_DASHBOARD) },
                                     onNavigateChangeBank = { viewModel.navigateTo(AppScreen.CHANGE_BANK) },
+                                    onNavigateKivoPlus = { viewModel.navigateTo(AppScreen.KIVOPLUS_UPGRADE) },
                                     onLogout = { viewModel.logout() },
                                     onUpdatePin = { oldPin, newPin -> viewModel.updatePin(oldPin, newPin) {} },
                                     onUpdatePassword = { oldPass, newPass -> viewModel.updatePassword(oldPass, newPass) {} },
@@ -274,6 +290,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                             withdrawalRequests = withdrawalRequests,
                             allUsers = allUsers,
                             pendingKycUsers = pendingKycUsers,
+                            pendingKivoPlusUsers = pendingKivoPlusUsers,
                             bankChangeRequests = allBankChangeRequests,
                             allTransactions = allTransactions,
                             auditLogs = auditLogs,
@@ -283,6 +300,8 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                             onRejectWithdraw = { txId, reason -> viewModel.rejectWithdrawal(txId, reason) },
                             onApproveKyc = { userId -> viewModel.adminApproveKyc(userId) },
                             onRejectKyc = { userId, reason -> viewModel.adminRejectKyc(userId, reason) },
+                            onApproveKivoPlus = { userId -> viewModel.adminApproveKivoPlus(userId) },
+                            onRejectKivoPlus = { userId, reason -> viewModel.adminRejectKivoPlus(userId, reason) },
                             onApproveBankChange = { reqId -> viewModel.adminApproveBankChange(reqId) },
                             onRejectBankChange = { reqId, reason -> viewModel.adminRejectBankChange(reqId, reason) },
                             onSaveWithdrawFee = { newFee -> viewModel.updateWithdrawFee(newFee) },
@@ -292,6 +311,15 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                             onDeleteBanner = { bannerId ->
                                 viewModel.adminDeleteBanner(bannerId)
                             }
+                        )
+
+                        AppScreen.KIVOPLUS_UPGRADE -> KivoPlusScreen(
+                            user = currentUser,
+                            onBack = { viewModel.navigateTo(AppScreen.MAIN) },
+                            onSubmitUpgrade = { nik, ktpUri, selfieUri, onSuccess ->
+                                viewModel.submitKivoPlusUpgrade(nik, ktpUri, selfieUri, onSuccess)
+                            },
+                            onShowToast = { msg -> viewModel.showToast(msg) }
                         )
 
                         AppScreen.RECEIPT_DETAIL -> ReceiptScreen(

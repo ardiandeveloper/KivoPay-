@@ -49,6 +49,12 @@ class Converters {
 
     @TypeConverter
     fun toBankChangeStatus(value: String): BankChangeStatus = runCatching { BankChangeStatus.valueOf(value) }.getOrDefault(BankChangeStatus.PENDING_CS)
+
+    @TypeConverter
+    fun fromKivoPlusStatus(status: com.example.data.model.KivoPlusStatus): String = status.name
+
+    @TypeConverter
+    fun toKivoPlusStatus(value: String): com.example.data.model.KivoPlusStatus = runCatching { com.example.data.model.KivoPlusStatus.valueOf(value) }.getOrDefault(com.example.data.model.KivoPlusStatus.NOT_UPGRADED)
 }
 
 @Database(
@@ -61,7 +67,7 @@ class Converters {
         AuditLogEntity::class,
         BankChangeRequestEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

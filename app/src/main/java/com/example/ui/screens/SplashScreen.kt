@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -79,29 +80,59 @@ fun SplashScreen() {
 
             Spacer(modifier = Modifier.height(36.dp))
 
-            // Smooth Loading Animation
+            // Smooth Loading Animation & 10s progress
             CircularProgressIndicator(
                 modifier = Modifier.size(36.dp),
                 color = PrimaryBlue,
                 strokeWidth = 3.dp
             )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = "Menghubungkan ke server aman...",
+                fontSize = 12.sp,
+                color = TextSecondaryMuted,
+                fontWeight = FontWeight.Medium
+            )
         }
 
-        // App Version at Bottom
+        // Regulated by Bank Indonesia & App Version at Bottom
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp),
+                .padding(bottom = 32.dp, start = 24.dp, end = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "KivoPay Mobile v2.4.0 (Production)",
+                text = "KIVOPAY DIAWASI OLEH",
                 fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp,
+                color = PrimaryBlue
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Bank Indonesia Official Logo - Full and Prominent
+            Image(
+                painter = painterResource(id = R.drawable.logo_bank_indonesia),
+                contentDescription = "Bank Indonesia Logo",
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .height(52.dp)
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = "versi aplikasi 2.4.5",
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 color = TextSecondaryMuted
             )
             Text(
-                text = "PT Kivo Finansial Indonesia • Berizin & Diawasi",
+                text = "PT Kivo Finansial Indonesia • Berizin & Diawasi Bank Sentral RI",
                 fontSize = 10.sp,
                 color = TextSecondaryMuted.copy(alpha = 0.8f),
                 modifier = Modifier.padding(top = 2.dp)

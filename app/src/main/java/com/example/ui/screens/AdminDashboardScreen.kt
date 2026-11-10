@@ -97,6 +97,7 @@ fun AdminDashboardScreen(
     withdrawalRequests: List<TransactionEntity>,
     allUsers: List<UserEntity>,
     pendingKycUsers: List<UserEntity>,
+    pendingKivoPlusUsers: List<UserEntity> = emptyList(),
     bankChangeRequests: List<BankChangeRequestEntity> = emptyList(),
     allTransactions: List<TransactionEntity>,
     auditLogs: List<AuditLogEntity>,
@@ -106,15 +107,21 @@ fun AdminDashboardScreen(
     onRejectWithdraw: (txId: String, reason: String) -> Unit,
     onApproveKyc: (userId: String) -> Unit,
     onRejectKyc: (userId: String, reason: String) -> Unit,
+    onApproveKivoPlus: (userId: String) -> Unit = {},
+    onRejectKivoPlus: (userId: String, reason: String) -> Unit = { _, _ -> },
     onApproveBankChange: (requestId: String) -> Unit = {},
     onRejectBankChange: (requestId: String, reason: String) -> Unit = { _, _ -> },
     onSaveWithdrawFee: (newFee: Double) -> Unit,
     onAddBanner: (title: String, subtitle: String, badge: String, colorHex: String) -> Unit = { _, _, _, _ -> },
     onDeleteBanner: (bannerId: String) -> Unit = {}
 ) {
-    // 0: Verifikasi Rekening Baru (KYC), 1: Ubah Rekening, 2: Penarikan, 3: Kelola Banner, 4: Pengguna, 5: Biaya, 6: Audit
+    // 0: Verifikasi Rekening Baru (KYC), 1: KivoPay+ Upgrade, 2: Ubah Rekening, 3: Penarikan, 4: Kelola Banner, 5: Pengguna, 6: Biaya, 7: Audit
     var activeAdminTab by remember { mutableStateOf(0) }
     var feeInput by remember { mutableStateOf(currentWithdrawFee) }
+
+    // Dialog state for rejecting KivoPay+
+    var selectedUserForKivoPlusReject by remember { mutableStateOf<UserEntity?>(null) }
+    var kivoPlusRejectReasonInput by remember { mutableStateOf("Foto e-KTP buram atau NIK tidak sesuai data pengguna") }
 
     // Dialog state for rejecting Bank Change
     var selectedBankChangeForReject by remember { mutableStateOf<BankChangeRequestEntity?>(null) }
@@ -183,31 +190,36 @@ fun AdminDashboardScreen(
                 Tab(
                     selected = activeAdminTab == 1,
                     onClick = { activeAdminTab = 1 },
-                    text = { Text("Ubah Rekening (${bankChangeRequests.count { it.status == BankChangeStatus.PENDING_CS }})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("KivoPay+ (${pendingKivoPlusUsers.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = activeAdminTab == 2,
                     onClick = { activeAdminTab = 2 },
-                    text = { Text("Tarik Dana (${withdrawalRequests.count { it.status == TransactionStatus.PENDING }})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("Ubah Rekening (${bankChangeRequests.count { it.status == BankChangeStatus.PENDING_CS }})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = activeAdminTab == 3,
                     onClick = { activeAdminTab = 3 },
-                    text = { Text("Banner (${activeBanners.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("Tarik Dana (${withdrawalRequests.count { it.status == TransactionStatus.PENDING }})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = activeAdminTab == 4,
                     onClick = { activeAdminTab = 4 },
-                    text = { Text("Pengguna (${allUsers.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("Banner (${activeBanners.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = activeAdminTab == 5,
                     onClick = { activeAdminTab = 5 },
-                    text = { Text("Biaya", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    text = { Text("Pengguna (${allUsers.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = activeAdminTab == 6,
                     onClick = { activeAdminTab = 6 },
+                    text = { Text("Biaya", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                )
+                Tab(
+                    selected = activeAdminTab == 7,
+                    onClick = { activeAdminTab = 7 },
                     text = { Text("Audit", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 )
             }
@@ -343,7 +355,135 @@ fun AdminDashboardScreen(
                 }
 
                 1 -> {
-                    // TAB 1: PERMOHONAN UBAH REKENING BANK
+                    // TAB 1: PERMOHONAN UPGRADE KIVOPAY+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        item {
+                            Text(
+                                text = "Permohonan Upgrade Akun KivoPay+ (Limit Rp 30 Juta)",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimaryDark
+                            )
+                            Text(
+                                text = "Periksa keabsahan NIK dan foto e-KTP serta foto selfie pengguna sebelum menyetujui penaikan limit.",
+                                fontSize = 12.sp,
+                                color = TextSecondaryMuted
+                            )
+                        }
+
+                        if (pendingKivoPlusUsers.isEmpty()) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(36.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(Icons.Default.Check, contentDescription = "Done", tint = EmeraldSuccess, modifier = Modifier.size(48.dp))
+                                        Text("Tidak ada permohonan KivoPay+ yang pending.", fontSize = 13.sp, color = TextSecondaryMuted, modifier = Modifier.padding(top = 8.dp))
+                                    }
+                                }
+                            }
+                        } else {
+                            items(pendingKivoPlusUsers) { user ->
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, CardBorderColor)
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(user.fullName, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimaryDark)
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = Color(0xFFFEF3C7)
+                                            ) {
+                                                Text("KivoPay+ Pending", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB45309), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("Email: ${user.email} | HP: ${user.phoneNumber}", fontSize = 12.sp, color = TextSecondaryMuted)
+                                        Text("NIK KTP: ${user.kivoPlusNik}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PrimaryBlue)
+                                        Text("Saldo Saat Ini: Rp ${formatCurrency(user.saldoAvailable)}", fontSize = 12.sp, color = TextPrimaryDark)
+                                        if (user.saldoHold > 0) {
+                                            Text("Saldo Tertahan: Rp ${formatCurrency(user.saldoHold)} (Akan otomatis cair jika disetujui)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CrimsonError)
+                                        }
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        // Document Previews Mockup Container
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = SoftBlueBg
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.Default.Security, contentDescription = "Doc", tint = PrimaryBlue, modifier = Modifier.size(24.dp))
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Column {
+                                                    Text("Dokumen: ${user.kivoPlusKtpUri.ifBlank { "ktp_verified.jpg" }}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
+                                                    Text("Selfie: ${user.kivoPlusSelfieUri.ifBlank { "selfie_ktp.jpg" }}", fontSize = 11.sp, color = TextSecondaryMuted)
+                                                }
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        // Action buttons
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    selectedUserForKivoPlusReject = user
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                shape = RoundedCornerShape(10.dp),
+                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = CrimsonError),
+                                                border = androidx.compose.foundation.BorderStroke(1.dp, CrimsonError)
+                                            ) {
+                                                Icon(Icons.Default.Close, contentDescription = "Tolak", modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Tolak", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            Button(
+                                                onClick = { onApproveKivoPlus(user.id) },
+                                                modifier = Modifier.weight(1f),
+                                                shape = RoundedCornerShape(10.dp),
+                                                colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess)
+                                            ) {
+                                                Icon(Icons.Default.Check, contentDescription = "Setujui", modifier = Modifier.size(16.dp), tint = Color.White)
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Setujui Plus", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                2 -> {
+                    // TAB 2: PERMOHONAN UBAH REKENING BANK
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -521,8 +661,8 @@ fun AdminDashboardScreen(
                     }
                 }
 
-                2 -> {
-                    // TAB 2: WITHDRAWAL REQUESTS
+                3 -> {
+                    // TAB 3: WITHDRAWAL REQUESTS
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -615,8 +755,8 @@ fun AdminDashboardScreen(
                     }
                 }
 
-                3 -> {
-                    // TAB 3: KELOLA & UPLOAD BANNER PROMO
+                4 -> {
+                    // TAB 4: KELOLA & UPLOAD BANNER PROMO
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -791,8 +931,8 @@ fun AdminDashboardScreen(
                     }
                 }
 
-                4 -> {
-                    // TAB 4: ALL USERS LIST
+                5 -> {
+                    // TAB 5: ALL USERS LIST
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -835,8 +975,8 @@ fun AdminDashboardScreen(
                     }
                 }
 
-                5 -> {
-                    // TAB 5: WITHDRAW FEE CONFIGURATION
+                6 -> {
+                    // TAB 6: WITHDRAW FEE CONFIGURATION
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -886,8 +1026,8 @@ fun AdminDashboardScreen(
                     }
                 }
 
-                6 -> {
-                    // TAB 6: AUDIT LOGS
+                7 -> {
+                    // TAB 7: AUDIT LOGS
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -988,6 +1128,68 @@ fun AdminDashboardScreen(
             },
             dismissButton = {
                 TextButton(onClick = { selectedUserForKycReject = null }) {
+                    Text("Batal")
+                }
+            },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(16.dp)
+        )
+    }
+
+    // Modal Dialog: Reject KivoPay+ with Mandatory Reason
+    if (selectedUserForKivoPlusReject != null) {
+        val targetUser = selectedUserForKivoPlusReject!!
+        AlertDialog(
+            onDismissRequest = { selectedUserForKivoPlusReject = null },
+            title = {
+                Text(
+                    text = "Tolak Pengajuan KivoPay+",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = CrimsonError
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        text = "Pengguna: ${targetUser.fullName} (NIK: ${targetUser.kivoPlusNik})",
+                        fontSize = 12.sp,
+                        color = TextPrimaryDark,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "Alasan Penolakan Resmi (Wajib):",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimaryDark
+                    )
+                    OutlinedTextField(
+                        value = kivoPlusRejectReasonInput,
+                        onValueChange = { kivoPlusRejectReasonInput = it },
+                        textStyle = kivoInputTextStyle(),
+                        colors = kivoTextFieldColors(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        placeholder = { Text("Contoh: Foto e-KTP buram / NIK tidak cocok") }
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onRejectKivoPlus(targetUser.id, kivoPlusRejectReasonInput)
+                        selectedUserForKivoPlusReject = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CrimsonError),
+                    enabled = kivoPlusRejectReasonInput.isNotBlank()
+                ) {
+                    Text("Tolak & Kirim Alasan", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { selectedUserForKivoPlusReject = null }) {
                     Text("Batal")
                 }
             },

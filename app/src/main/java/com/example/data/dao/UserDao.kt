@@ -32,6 +32,9 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE kycStatus = 'PENDING' AND isAdmin = 0 ORDER BY createdAt DESC")
     fun getPendingKycUsersFlow(): Flow<List<UserEntity>>
 
+    @Query("SELECT * FROM users WHERE kivoPlusStatus = 'PENDING_VERIFICATION' AND isAdmin = 0 ORDER BY kivoPlusRequestedAt DESC")
+    fun getPendingKivoPlusUsersFlow(): Flow<List<UserEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUser(user: UserEntity)
 
@@ -43,4 +46,7 @@ interface UserDao {
 
     @Query("UPDATE users SET kycStatus = :status, isKycVerified = :isVerified, kycRejectionReason = :reason WHERE id = :userId")
     suspend fun updateKycStatus(userId: String, status: KycStatus, isVerified: Boolean, reason: String)
+
+    @Query("UPDATE users SET isKivoPlus = :isPlus, kivoPlusStatus = :status, kivoPlusRejectionReason = :reason WHERE id = :userId")
+    suspend fun updateKivoPlusStatus(userId: String, isPlus: Boolean, status: com.example.data.model.KivoPlusStatus, reason: String)
 }
