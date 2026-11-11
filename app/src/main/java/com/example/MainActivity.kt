@@ -27,6 +27,7 @@ import com.example.ui.screens.AktivitasScreen
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.ChangeBankAccountScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.KivoInvoiceScreen
 import com.example.ui.screens.KivoPlusScreen
 import com.example.ui.screens.NoInternetScreen
 import com.example.ui.screens.NotifikasiScreen
@@ -67,6 +68,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
     val rcbApiKeyConfig by viewModel.rcbApiKeyConfig.collectAsStateWithLifecycle()
     val isBalanceHidden by viewModel.isBalanceHidden.collectAsStateWithLifecycle()
     val selectedTransaction by viewModel.selectedTransaction.collectAsStateWithLifecycle()
+    val activeInvoice by viewModel.activeInvoice.collectAsStateWithLifecycle()
 
     // Admin State
     val allTransactions by viewModel.allTransactions.collectAsStateWithLifecycle()
@@ -92,7 +94,11 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
     // Handle Back Press on Secondary Screens
     if (currentScreen != AppScreen.MAIN && currentScreen != AppScreen.SPLASH && currentScreen != AppScreen.AUTH) {
         BackHandler {
-            viewModel.navigateTo(AppScreen.MAIN)
+            if (currentScreen == AppScreen.TOPUP_INVOICE) {
+                viewModel.cancelInvoice()
+            } else {
+                viewModel.navigateTo(AppScreen.MAIN)
+            }
         }
     }
 
@@ -235,8 +241,23 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                         AppScreen.TOPUP -> TopUpScreen(
                             userBalance = currentUser?.saldoAvailable ?: 0.0,
                             onBack = { viewModel.navigateTo(AppScreen.MAIN) },
-                            onSubmitTopUp = { amount, method ->
-                                viewModel.topUp(amount, method) {}
+                            onCreateInvoice = { amount, channelCode, channelName ->
+                                viewModel.createTopUpInvoice(amount, channelCode, channelName) {}
+                            }
+                        )
+
+                        AppScreen.TOPUP_INVOICE -> KivoInvoiceScreen(
+                            invoice = activeInvoice,
+                            onBack = { viewModel.cancelInvoice() },
+                            onCheckStatus = { onPaid ->
+                                viewModel.checkInvoicePaymentStatus {
+                                    viewModel.navigateTo(AppScreen.MAIN)
+                                }
+                            },
+                            onManualConfirm = { onComplete ->
+                                viewModel.completeInvoicePaymentManual {
+                                    viewModel.navigateTo(AppScreen.MAIN)
+                                }
                             }
                         )
 

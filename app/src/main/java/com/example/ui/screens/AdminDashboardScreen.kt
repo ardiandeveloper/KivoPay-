@@ -317,6 +317,20 @@ fun AdminDashboardScreen(
                                                 }
                                                 Text("A.N Pemilik: ${user.userBankAccountHolder}", fontSize = 12.sp, color = TextPrimaryDark)
                                                 Text("Lampiran Kamera: ${user.bankBookDocumentUri}", fontSize = 11.sp, color = PrimaryBlue)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = EmeraldSuccess.copy(alpha = 0.12f)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Icon(Icons.Default.Check, contentDescription = null, tint = EmeraldSuccess, modifier = Modifier.size(11.dp))
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Text("Akan otomatis didaftarkan ke RCB Pay Gateway", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EmeraldSuccess)
+                                                    }
+                                                }
                                             }
                                         }
 
@@ -331,7 +345,7 @@ fun AdminDashboardScreen(
                                                 onClick = {
                                                     selectedUserForKycReject = user
                                                 },
-                                                modifier = Modifier.weight(1f),
+                                                modifier = Modifier.weight(0.4f),
                                                 shape = RoundedCornerShape(10.dp),
                                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = CrimsonError),
                                                 border = androidx.compose.foundation.BorderStroke(1.dp, CrimsonError)
@@ -343,13 +357,13 @@ fun AdminDashboardScreen(
 
                                             Button(
                                                 onClick = { onApproveKyc(user.id) },
-                                                modifier = Modifier.weight(1f),
+                                                modifier = Modifier.weight(0.6f),
                                                 shape = RoundedCornerShape(10.dp),
                                                 colors = ButtonDefaults.buttonColors(containerColor = EmeraldSuccess)
                                             ) {
                                                 Icon(Icons.Default.Check, contentDescription = "Setujui", modifier = Modifier.size(16.dp), tint = Color.White)
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Setujui", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                                Text("Setujui & Daftarkan RCB", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                             }
                                         }
                                     }

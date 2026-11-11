@@ -36,8 +36,130 @@ data class RcbCreatePaymentData(
     @Json(name = "qris_url") val qrisUrl: String? = null,
     @Json(name = "qris_string") val qrisString: String? = null,
     @Json(name = "amount") val amount: Long? = null,
-    @Json(name = "total_amount") val totalAmount: Long? = null
+    @Json(name = "total_amount") val totalAmount: Long? = null,
+    @Json(name = "va_number") val vaNumber: String? = null,
+    @Json(name = "account_number") val accountNumber: String? = null,
+    @Json(name = "expiry_time") val expiryTime: String? = null
 )
+
+// --- Official RCB Payment Channels Specification ---
+data class RcbChannelInfo(
+    val code: String,
+    val name: String,
+    val category: String, // "QRIS & E-Wallet", "Virtual Account Bank", "Kripto & Pulsa"
+    val description: String,
+    val isRecommended: Boolean = false,
+    val iconType: String = "VA" // "QRIS", "VA", "CRYPTO", "PULSA"
+)
+
+object RcbChannels {
+    val allChannels: List<RcbChannelInfo> = listOf(
+        // QRIS Channels
+        RcbChannelInfo(
+            code = "qris_mdr",
+            name = "QRIS Direct MDR (Bank BNI Direct)",
+            category = "QRIS & E-Wallet",
+            description = "🔥 Rekomendasi - Jaringan Direct BNI Ultra-Stabil 99.9% uptime, bebas kendala server, settlement instan",
+            isRecommended = true,
+            iconType = "QRIS"
+        ),
+        RcbChannelInfo(
+            code = "qris",
+            name = "QRIS Dinamis Multi-Bank",
+            category = "QRIS & E-Wallet",
+            description = "Scan instan via BCA, Mandiri, BRI, BNI, GoPay, OVO, Dana, ShopeePay",
+            iconType = "QRIS"
+        ),
+
+        // Virtual Account Bank
+        RcbChannelInfo(
+            code = "bni_va",
+            name = "BNI Virtual Account",
+            category = "Virtual Account Bank",
+            description = "Transfer instan via BNI Mobile Banking, ATM BNI, atau SMS Banking",
+            iconType = "VA"
+        ),
+        RcbChannelInfo(
+            code = "bri_va",
+            name = "BRI Virtual Account (BRIVA)",
+            category = "Virtual Account Bank",
+            description = "Transfer instan via BRImo atau ATM BRI seluruh Indonesia",
+            iconType = "VA"
+        ),
+        RcbChannelInfo(
+            code = "cimb_niaga_va",
+            name = "CIMB Niaga VA",
+            category = "Virtual Account Bank",
+            description = "Transfer via OCTO Mobile, OCTO Clicks, atau ATM CIMB Niaga",
+            iconType = "VA"
+        ),
+        RcbChannelInfo(
+            code = "permata_va",
+            name = "Permata Bank VA",
+            category = "Virtual Account Bank",
+            description = "Transfer via PermataMobile X atau ATM Permata",
+            iconType = "VA"
+        ),
+        RcbChannelInfo(
+            code = "bnc_va",
+            name = "BNC Bank Neo Commerce VA",
+            category = "Virtual Account Bank",
+            description = "Transfer instan via Neobank atau ATM",
+            iconType = "VA"
+        ),
+        RcbChannelInfo(
+            code = "maybank_va",
+            name = "Maybank VA",
+            category = "Virtual Account Bank",
+            description = "Transfer via M2U ID App atau ATM Maybank",
+            iconType = "VA"
+        ),
+        RcbChannelInfo(
+            code = "sampoerna_va",
+            name = "Sahabat Sampoerna VA",
+            category = "Virtual Account Bank",
+            description = "Transfer via Bank Sahabat Sampoerna atau jaringan ATM",
+            iconType = "VA"
+        ),
+        RcbChannelInfo(
+            code = "artha_graha_va",
+            name = "Artha Graha VA",
+            category = "Virtual Account Bank",
+            description = "Transfer via agi Mobile atau ATM Artha Graha",
+            iconType = "VA"
+        ),
+        RcbChannelInfo(
+            code = "atm_bersama_va",
+            name = "ATM Bersama VA",
+            category = "Virtual Account Bank",
+            description = "Mendukung transfer dari 80+ bank anggota ATM Bersama",
+            iconType = "VA"
+        ),
+        RcbChannelInfo(
+            code = "va",
+            name = "Semua Virtual Account Terintegrasi",
+            category = "Virtual Account Bank",
+            description = "Virtual Account otomatis terpadu multi-bank partner",
+            iconType = "VA"
+        ),
+
+        // Kripto (Crypto) & Pulsa
+        RcbChannelInfo(
+            code = "usdt",
+            name = "Kripto USDT (Stablecoin)",
+            category = "Kripto & Pulsa",
+            description = "Kripto USDT: TRC20, ERC20, BEP20, TON, SOL, NEAR",
+            iconType = "CRYPTO"
+        ),
+        RcbChannelInfo(
+            code = "pulsa",
+            name = "Pulsa Seluler",
+            category = "Kripto & Pulsa",
+            description = "Transfer pulsa resmi Telkomsel, XL, Axis, Smartfren, Tri",
+            iconType = "PULSA"
+        )
+    )
+}
 
 @JsonClass(generateAdapter = true)
 data class RcbCreatePaymentResponse(
@@ -161,6 +283,13 @@ object RcbApiClient {
     fun mapBankToRcbCode(bankName: String): String {
         val upper = bankName.uppercase()
         return when {
+            // E-Wallets
+            upper.contains("OVO") -> "OVO"
+            upper.contains("DANA") -> "DANA"
+            upper.contains("GOPAY") || upper.contains("GO-PAY") -> "GOPAY"
+            upper.contains("SHOPEEPAY") || upper.contains("SHOPEE") -> "SHOPEEPAY"
+            upper.contains("LINKAJA") || upper.contains("LINK AJA") -> "LINKAJA"
+            // Banks
             upper.contains("BCA") -> "BCA"
             upper.contains("MANDIRI") -> "MANDIRI"
             upper.contains("BRI") -> "BRI"
@@ -172,7 +301,11 @@ object RcbApiClient {
             upper.contains("JAGO") -> "JAGO"
             upper.contains("BNC") || upper.contains("NEO") -> "BNC"
             upper.contains("SEABANK") -> "SEABANK"
-            upper.contains("ALOBANK") -> "ALOBANK"
+            upper.contains("ALOBANK") || upper.contains("ALLO") -> "ALOBANK"
+            upper.contains("SAMPOERNA") -> "SAMPOERNA"
+            upper.contains("MAYBANK") -> "MAYBANK"
+            upper.contains("NOBU") -> "NOBU"
+            upper.contains("BTN") -> "BTN"
             else -> "OTHER"
         }
     }

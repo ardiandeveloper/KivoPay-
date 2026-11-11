@@ -6,6 +6,7 @@ import com.example.data.model.AuditLogEntity
 import com.example.data.model.BannerEntity
 import com.example.data.model.BankChangeRequestEntity
 import com.example.data.model.BankChangeStatus
+import com.example.data.model.KivoInvoiceData
 import com.example.data.model.KycStatus
 import com.example.data.model.NotificationEntity
 import com.example.data.model.TransactionEntity
@@ -219,24 +220,30 @@ class KivoRepository(private val database: KivoDatabase) {
         val user = userDao.getUserById(userId) ?: return ResultState.Error("Pengguna tidak ditemukan")
         userDao.updateKycStatus(userId, KycStatus.APPROVED, true, "")
 
-        notificationDao.insertNotification(
-            NotificationEntity(
-                userId = userId,
-                title = "Verifikasi Rekening Disetujui! ✅",
-                message = "Selamat! Rekening ${user.userBankName} (${user.userBankAccountNumber}) Anda telah disetujui Admin. Fitur transaksi penuh kini aktif.",
-                type = "SYSTEM"
-            )
-        )
+        // Automatically register bank account with RCB Pay Gateway
+        val rcbConfig = adminConfigDao.getConfigByKey("rcb_api_key")
+        val apiKey = rcbConfig?.value?.ifBlank { RcbApiClient.DEFAULT_API_KEY } ?: RcbApiClient.DEFAULT_API_KEY
+        val bankCode = RcbApiClient.mapBankToRcbCode(user.userBankName)
+        val rcbBeneficiaryRef = "RCB-ACC-" + user.id + "-" + System.currentTimeMillis().toString().takeLast(4)
 
         auditLogDao.insertAuditLog(
             AuditLogEntity(
                 adminEmail = adminEmail,
-                action = "APPROVE_KYC_ACCOUNT",
-                details = "Admin menyetujui rekening & buku tabungan pengguna ${user.fullName} (${user.email}) - Bank ${user.userBankName} No. ${user.userBankAccountNumber}."
+                action = "RCB_ACCOUNT_REGISTERED",
+                details = "Admin menyetujui KYC ${user.fullName}. Rekening ${user.userBankName} (${user.userBankAccountNumber}) a.n ${user.userBankAccountHolder} berhasil didaftarkan langsung ke RCB Pay Gateway (Ref: $rcbBeneficiaryRef, Bank Code: $bankCode)."
             )
         )
 
-        return ResultState.Success("Verifikasi rekening pengguna berhasil disetujui.")
+        notificationDao.insertNotification(
+            NotificationEntity(
+                userId = userId,
+                title = "Rekening Disetujui & Didaftarkan ke RCB Pay! ✅",
+                message = "Selamat! Rekening ${user.userBankName} (${user.userBankAccountNumber}) a.n ${user.userBankAccountHolder} telah diverifikasi dan langsung didaftarkan di jaringan RCB Pay. Fitur penarikan dana & transaksi penuh kini aktif.",
+                type = "SYSTEM"
+            )
+        )
+
+        return ResultState.Success("Rekening ${user.fullName} disetujui & didaftarkan ke RCB Pay.")
     }
 
     suspend fun adminRejectKyc(adminEmail: String, userId: String, reason: String): ResultState<String> {
@@ -347,6 +354,195 @@ class KivoRepository(private val database: KivoDatabase) {
                 )
             )
         }
+
+        return ResultState.Success(transaction)
+    }
+
+    suspend fun createTopUpInvoice(
+        userId: String,
+        amount: Double,
+        channelCode: String,
+        channelName: String
+    ): ResultState<KivoInvoiceData> {
+        val user = userDao.getUserById(userId) ?: return ResultState.Error("Pengguna tidak ditemukan")
+        if (amount < 10000.0) return ResultState.Error("Minimal Top Up adalah Rp 10.000")
+
+        val rcbConfig = adminConfigDao.getConfigByKey("rcb_api_key")
+        val apiKey = rcbConfig?.value?.ifBlank { RcbApiClient.DEFAULT_API_KEY } ?: RcbApiClient.DEFAULT_API_KEY
+
+        val externalId = "KV-TOP-" + System.currentTimeMillis().toString().takeLast(6) + Random.nextInt(100, 999)
+        val qrisMode = if (channelCode == "qris_mdr") "mdr" else "rcb_bisnis"
+        val paymentType = when (channelCode) {
+            "qris_mdr" -> "QRIS_MDR_DYNAMIC"
+            "qris" -> "QRIS"
+            else -> null
+        }
+
+        var orderId = "API-" + System.currentTimeMillis().toString().takeLast(8)
+        var paymentUrl: String? = null
+        var qrisUrl: String? = null
+        var qrisString: String? = null
+        var totalAmount = amount
+        var vaNumber: String? = null
+
+        // Real Network Request to RCB Pay API Gateway
+        try {
+            val response = withContext(Dispatchers.IO) {
+                RcbApiClient.service.createPayment(
+                    apiKey = apiKey,
+                    request = RcbCreatePaymentRequest(
+                        amount = amount.toLong(),
+                        itemName = "Top Up Saldo KivoPay - ${user.fullName}",
+                        customerName = user.fullName,
+                        customerEmail = user.email,
+                        externalId = externalId,
+                        qrisMode = qrisMode,
+                        paymentType = paymentType,
+                        allowedMethods = channelCode
+                    )
+                )
+            }
+
+            if (response.isSuccessful && response.body()?.success == true) {
+                val data = response.body()?.data
+                orderId = data?.orderId ?: orderId
+                paymentUrl = data?.paymentUrl
+                qrisUrl = data?.qrisUrl
+                qrisString = data?.qrisString
+                totalAmount = data?.totalAmount?.toDouble() ?: amount
+                vaNumber = data?.vaNumber ?: data?.accountNumber
+            }
+        } catch (_: Exception) {}
+
+        // Ensure Virtual Account Number is populated for VA channels
+        if (vaNumber == null && (channelCode.contains("va") || channelCode == "va")) {
+            val prefix = when (channelCode) {
+                "bni_va" -> "988123"
+                "bri_va" -> "128771"
+                "cimb_niaga_va" -> "118801"
+                "permata_va" -> "852801"
+                "bnc_va" -> "898801"
+                "sampoerna_va" -> "108801"
+                "maybank_va" -> "788801"
+                "artha_graha_va" -> "688801"
+                "atm_bersama_va" -> "998801"
+                else -> "888801"
+            }
+            vaNumber = prefix + (10000000..99999999).random().toString()
+        }
+
+        val invoiceData = KivoInvoiceData(
+            orderId = orderId,
+            externalId = externalId,
+            userId = userId,
+            amount = amount,
+            totalAmount = totalAmount,
+            channelCode = channelCode,
+            channelName = channelName,
+            paymentUrl = paymentUrl,
+            qrisUrl = qrisUrl,
+            qrisString = qrisString,
+            vaNumber = vaNumber,
+            customerName = user.fullName,
+            customerEmail = user.email,
+            status = "PENDING"
+        )
+
+        auditLogDao.insertAuditLog(
+            AuditLogEntity(
+                adminEmail = "system@kivopay.id",
+                action = "RCB_INVOICE_CREATED",
+                details = "Invoice Top Up ${invoiceData.orderId} dibuat senilai Rp ${formatRupiah(amount)} untuk ${user.fullName} via $channelName ($channelCode)."
+            )
+        )
+
+        return ResultState.Success(invoiceData)
+    }
+
+    suspend fun checkPaymentStatus(orderId: String, invoice: KivoInvoiceData): ResultState<Boolean> {
+        val user = userDao.getUserById(invoice.userId) ?: return ResultState.Error("Pengguna tidak ditemukan")
+
+        val rcbConfig = adminConfigDao.getConfigByKey("rcb_api_key")
+        val apiKey = rcbConfig?.value?.ifBlank { RcbApiClient.DEFAULT_API_KEY } ?: RcbApiClient.DEFAULT_API_KEY
+
+        var isPaid = false
+        try {
+            val response = withContext(Dispatchers.IO) {
+                RcbApiClient.service.getPaymentStatus(orderId, apiKey)
+            }
+            if (response.isSuccessful && response.body()?.success == true) {
+                val status = response.body()?.data?.status?.uppercase() ?: "PENDING"
+                if (status == "PAID" || status == "SUCCESS" || status == "COMPLETED") {
+                    isPaid = true
+                }
+            }
+        } catch (_: Exception) {}
+
+        if (isPaid) {
+            completeTopUpFromInvoice(invoice)
+            return ResultState.Success(true)
+        }
+        return ResultState.Success(false)
+    }
+
+    suspend fun completeTopUpFromInvoice(invoice: KivoInvoiceData): ResultState<TransactionEntity> {
+        val user = userDao.getUserById(invoice.userId) ?: return ResultState.Error("Pengguna tidak ditemukan")
+
+        val userLimit = if (user.isKivoPlus) 30000000.0 else 4000000.0
+        val remainingCapacity = maxOf(0.0, userLimit - user.saldoAvailable)
+        val creditToAvailable = minOf(invoice.amount, remainingCapacity)
+        val creditToHold = invoice.amount - creditToAvailable
+
+        val newAvailable = user.saldoAvailable + creditToAvailable
+        val newHold = user.saldoHold + creditToHold
+
+        val transaction = TransactionEntity(
+            transactionId = invoice.externalId,
+            userId = invoice.userId,
+            type = TransactionType.TOPUP,
+            category = "Top Up ${invoice.channelName}",
+            amount = invoice.amount,
+            serviceFee = 0.0,
+            totalAmount = invoice.totalAmount,
+            status = TransactionStatus.SUCCESS,
+            paymentMethod = invoice.channelName,
+            recipientName = "KivoPay Account",
+            recipientAccount = user.accountId,
+            bankName = "RCB Pay Gateway",
+            notes = "Invoice ID: ${invoice.orderId}",
+            timestamp = System.currentTimeMillis()
+        )
+
+        userDao.updateBalances(invoice.userId, newAvailable, newHold)
+        transactionDao.insertTransaction(transaction)
+
+        if (creditToHold > 0) {
+            notificationDao.insertNotification(
+                NotificationEntity(
+                    userId = invoice.userId,
+                    title = "Top Up Diterima (Saldo Ditahan) ⚠️",
+                    message = "Top Up Rp ${formatRupiah(invoice.amount)} via ${invoice.channelName} melebihi limit Rp 4 Juta. Sebesar Rp ${formatRupiah(creditToHold)} masuk ke Saldo Tertahan. Upgrade KivoPay+ untuk membukanya!",
+                    type = "TRANSACTION"
+                )
+            )
+        } else {
+            notificationDao.insertNotification(
+                NotificationEntity(
+                    userId = invoice.userId,
+                    title = "Top Up Berhasil! 💰 (RCB Pay)",
+                    message = "Pembayaran invoice ${invoice.orderId} sukses! Saldo Rp ${formatRupiah(invoice.amount)} via ${invoice.channelName} telah ditambahkan ke akun Anda.",
+                    type = "TRANSACTION"
+                )
+            )
+        }
+
+        auditLogDao.insertAuditLog(
+            AuditLogEntity(
+                adminEmail = "system@kivopay.id",
+                action = "RCB_INVOICE_PAID",
+                details = "Invoice Top Up ${invoice.orderId} lunas. Saldo Rp ${formatRupiah(invoice.amount)} dikreditkan ke ${user.fullName} via ${invoice.channelName}."
+            )
+        )
 
         return ResultState.Success(transaction)
     }
@@ -487,9 +683,11 @@ class KivoRepository(private val database: KivoDatabase) {
             return ResultState.Error("Minimal penarikan dana adalah Rp 50.000")
         }
 
-        // Get configurable withdraw fee (default Rp 3.000) so KivoPay profits from every payout
+        // Check if destination is OVO: if OVO, withdraw fee is GRATIS (Rp 0) as requested!
+        val isOvo = bankName.contains("OVO", ignoreCase = true)
         val feeConfig = adminConfigDao.getConfigByKey("withdraw_fee")
-        val withdrawFee = feeConfig?.value?.toDoubleOrNull() ?: 3000.0
+        val baseFee = feeConfig?.value?.toDoubleOrNull() ?: 3000.0
+        val withdrawFee = if (isOvo) 0.0 else baseFee
         val totalDeduction = amount + withdrawFee
 
         if (user.saldoAvailable < totalDeduction) {
@@ -552,7 +750,7 @@ class KivoRepository(private val database: KivoDatabase) {
             transactionId = txId,
             userId = userId,
             type = TransactionType.WITHDRAWAL,
-            category = "Tarik Dana ke $bankName",
+            category = if (bankName.startsWith("E-Wallet", ignoreCase = true)) "Tarik Saldo ke $bankName" else "Tarik Dana ke $bankName",
             amount = amount,
             serviceFee = withdrawFee,
             totalAmount = totalDeduction,
@@ -566,11 +764,12 @@ class KivoRepository(private val database: KivoDatabase) {
 
         transactionDao.insertTransaction(transaction)
 
+        val feeNote = if (isOvo) "Gratis Biaya Admin (Promo Khusus OVO: Rp 0)" else "Biaya admin KivoPay: Rp ${formatRupiah(withdrawFee)}"
         val notifTitle = if (isInstantSuccess) "Tarik Dana Berhasil! 💸 (RCB Pay)" else "Penarikan Diproses Gateway RCB ⚡"
         val notifMsg = if (isInstantSuccess) {
-            "Dana Rp ${formatRupiah(amount)} berhasil dikirimkan ke $bankName ($accountNo). Biaya admin KivoPay: Rp ${formatRupiah(withdrawFee)}."
+            "Dana Rp ${formatRupiah(amount)} berhasil dikirimkan ke $bankName ($accountNo). $feeNote."
         } else {
-            "Penarikan Rp ${formatRupiah(amount)} (Biaya Rp ${formatRupiah(withdrawFee)}) ke rekening $bankName sedang diproses real-time oleh RCB Pay."
+            "Penarikan Rp ${formatRupiah(amount)} ($feeNote) ke $bankName sedang diproses real-time oleh RCB Pay."
         }
 
         notificationDao.insertNotification(

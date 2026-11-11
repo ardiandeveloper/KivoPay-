@@ -501,7 +501,22 @@ fun AuthScreen(
                                     textStyle = inputTextStyle,
                                     colors = customTextFieldColors
                                 )
-                                filteredBanks.take(50).forEach { bank ->
+                                if (bankSearchQuery.isNotBlank() && !supportedBanks.any { it.equals(bankSearchQuery, ignoreCase = true) }) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Gunakan Bank Kustom: \"$bankSearchQuery\"", color = PrimaryBlue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            }
+                                        },
+                                        onClick = {
+                                            selectedBank = bankSearchQuery.trim()
+                                            bankDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                                filteredBanks.take(80).forEach { bank ->
                                     DropdownMenuItem(
                                         text = { Text(bank, color = TextPrimaryDark, fontSize = 13.sp) },
                                         onClick = {

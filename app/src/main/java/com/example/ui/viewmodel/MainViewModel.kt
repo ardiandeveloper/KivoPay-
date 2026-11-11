@@ -39,7 +39,8 @@ enum class AppScreen {
     CHANGE_BANK,
     KIVOPLUS_UPGRADE,
     ADMIN_DASHBOARD,
-    RECEIPT_DETAIL
+    RECEIPT_DETAIL,
+    TOPUP_INVOICE
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -67,6 +68,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isBalanceHidden = MutableStateFlow(false)
     val isBalanceHidden = _isBalanceHidden.asStateFlow()
+
+    private val _activeInvoice = MutableStateFlow<com.example.data.model.KivoInvoiceData?>(null)
+    val activeInvoice: StateFlow<com.example.data.model.KivoInvoiceData?> = _activeInvoice.asStateFlow()
 
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
@@ -284,6 +288,79 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 else -> {}
             }
         }
+    }
+
+    fun createTopUpInvoice(
+        amount: Double,
+        channelCode: String,
+        channelName: String,
+        onSuccess: () -> Unit
+    ) {
+        val userId = _currentUserId.value ?: return
+        sessionManager.updateLastActive()
+        viewModelScope.launch {
+            when (val res = repository.createTopUpInvoice(userId, amount, channelCode, channelName)) {
+                is ResultState.Success -> {
+                    _activeInvoice.value = res.data
+                    _currentScreen.value = AppScreen.TOPUP_INVOICE
+                    onSuccess()
+                }
+                is ResultState.Error -> showToast(res.message)
+                else -> {}
+            }
+        }
+    }
+
+    fun checkInvoicePaymentStatus(onPaid: () -> Unit) {
+        val invoice = _activeInvoice.value ?: return
+        sessionManager.updateLastActive()
+        viewModelScope.launch {
+            when (val res = repository.checkPaymentStatus(invoice.orderId, invoice)) {
+                is ResultState.Success -> {
+                    if (res.data) {
+                        _activeInvoice.value = invoice.copy(status = "PAID")
+                        showToast("Pembayaran Lunas! Saldo berhasil ditambahkan.")
+                        com.example.ui.util.NotificationHelper.showTransactionNotification(
+                            getApplication(),
+                            "Top Up Berhasil! 💰",
+                            "Saldo Rp ${String.format("%,d", invoice.amount.toLong()).replace(',', '.')} via ${invoice.channelName} telah masuk ke akun Anda."
+                        )
+                        onPaid()
+                    } else {
+                        showToast("Status: Menunggu Pembayaran. Silakan selesaikan transfer.")
+                    }
+                }
+                is ResultState.Error -> showToast(res.message)
+                else -> {}
+            }
+        }
+    }
+
+    fun completeInvoicePaymentManual(onComplete: () -> Unit) {
+        val invoice = _activeInvoice.value ?: return
+        sessionManager.updateLastActive()
+        viewModelScope.launch {
+            when (val res = repository.completeTopUpFromInvoice(invoice)) {
+                is ResultState.Success -> {
+                    _activeInvoice.value = invoice.copy(status = "PAID")
+                    viewReceipt(res.data)
+                    showToast("Pembayaran diverifikasi! Saldo berhasil dikreditkan.")
+                    com.example.ui.util.NotificationHelper.showTransactionNotification(
+                        getApplication(),
+                        "Top Up Berhasil! 💰",
+                        "Saldo Rp ${String.format("%,d", invoice.amount.toLong()).replace(',', '.')} via ${invoice.channelName} sukses ditambahkan."
+                    )
+                    onComplete()
+                }
+                is ResultState.Error -> showToast(res.message)
+                else -> {}
+            }
+        }
+    }
+
+    fun cancelInvoice() {
+        _activeInvoice.value = null
+        _currentScreen.value = AppScreen.TOPUP
     }
 
     fun transfer(
