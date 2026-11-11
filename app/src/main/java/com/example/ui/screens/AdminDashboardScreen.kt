@@ -328,7 +328,7 @@ fun AdminDashboardScreen(
                                                     ) {
                                                         Icon(Icons.Default.Check, contentDescription = null, tint = EmeraldSuccess, modifier = Modifier.size(11.dp))
                                                         Spacer(modifier = Modifier.width(4.dp))
-                                                        Text("Akan otomatis didaftarkan ke RCB Pay Gateway", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EmeraldSuccess)
+                                                        Text("Akan otomatis terdaftar di gateway pembayaran", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EmeraldSuccess)
                                                     }
                                                 }
                                             }
@@ -363,7 +363,7 @@ fun AdminDashboardScreen(
                                             ) {
                                                 Icon(Icons.Default.Check, contentDescription = "Setujui", modifier = Modifier.size(16.dp), tint = Color.White)
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Setujui & Daftarkan RCB", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                                Text("Setujui Rekening", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                             }
                                         }
                                     }
@@ -763,7 +763,7 @@ fun AdminDashboardScreen(
                                                 ) {
                                                     Icon(Icons.Default.Check, contentDescription = "Setujui", modifier = Modifier.size(16.dp), tint = Color.White)
                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Kirim via RCB Pay", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                                    Text("Kirim Pencairan", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                                 }
                                             }
                                         }
@@ -1059,7 +1059,7 @@ fun AdminDashboardScreen(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Gateway RCB Pay API", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
+                                    Text("Gateway Pembayaran API", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
                                         color = EmeraldSuccess.copy(alpha = 0.12f)
@@ -1111,7 +1111,7 @@ fun AdminDashboardScreen(
                                 ) {
                                     Icon(Icons.Default.Security, contentDescription = "Simpan Key", tint = Color.White)
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Simpan & Sinkronkan Kunci RCB", fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text("Simpan & Sinkronkan Kunci API", fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
                         }

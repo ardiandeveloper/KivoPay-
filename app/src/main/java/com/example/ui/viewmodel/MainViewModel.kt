@@ -311,9 +311,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun checkInvoicePaymentStatus(onPaid: () -> Unit) {
+    fun checkInvoicePaymentStatus(silent: Boolean = false, onPaid: () -> Unit) {
         val invoice = _activeInvoice.value ?: return
-        sessionManager.updateLastActive()
+        if (invoice.status == "PAID") return
         viewModelScope.launch {
             when (val res = repository.checkPaymentStatus(invoice.orderId, invoice)) {
                 is ResultState.Success -> {
@@ -326,33 +326,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             "Saldo Rp ${String.format("%,d", invoice.amount.toLong()).replace(',', '.')} via ${invoice.channelName} telah masuk ke akun Anda."
                         )
                         onPaid()
-                    } else {
-                        showToast("Status: Menunggu Pembayaran. Silakan selesaikan transfer.")
+                    } else if (!silent) {
+                        showToast("Status: Menunggu Pembayaran. Silakan selesaikan transaksi.")
                     }
                 }
-                is ResultState.Error -> showToast(res.message)
-                else -> {}
-            }
-        }
-    }
-
-    fun completeInvoicePaymentManual(onComplete: () -> Unit) {
-        val invoice = _activeInvoice.value ?: return
-        sessionManager.updateLastActive()
-        viewModelScope.launch {
-            when (val res = repository.completeTopUpFromInvoice(invoice)) {
-                is ResultState.Success -> {
-                    _activeInvoice.value = invoice.copy(status = "PAID")
-                    viewReceipt(res.data)
-                    showToast("Pembayaran diverifikasi! Saldo berhasil dikreditkan.")
-                    com.example.ui.util.NotificationHelper.showTransactionNotification(
-                        getApplication(),
-                        "Top Up Berhasil! 💰",
-                        "Saldo Rp ${String.format("%,d", invoice.amount.toLong()).replace(',', '.')} via ${invoice.channelName} sukses ditambahkan."
-                    )
-                    onComplete()
+                is ResultState.Error -> {
+                    if (!silent) showToast(res.message)
                 }
-                is ResultState.Error -> showToast(res.message)
                 else -> {}
             }
         }

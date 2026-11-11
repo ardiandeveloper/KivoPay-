@@ -249,13 +249,8 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                         AppScreen.TOPUP_INVOICE -> KivoInvoiceScreen(
                             invoice = activeInvoice,
                             onBack = { viewModel.cancelInvoice() },
-                            onCheckStatus = { onPaid ->
-                                viewModel.checkInvoicePaymentStatus {
-                                    viewModel.navigateTo(AppScreen.MAIN)
-                                }
-                            },
-                            onManualConfirm = { onComplete ->
-                                viewModel.completeInvoicePaymentManual {
+                            onCheckStatus = { silent, onPaid ->
+                                viewModel.checkInvoicePaymentStatus(silent = silent) {
                                     viewModel.navigateTo(AppScreen.MAIN)
                                 }
                             }

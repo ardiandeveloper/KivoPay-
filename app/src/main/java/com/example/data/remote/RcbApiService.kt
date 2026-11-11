@@ -35,6 +35,8 @@ data class RcbCreatePaymentData(
     @Json(name = "payment_url") val paymentUrl: String? = null,
     @Json(name = "qris_url") val qrisUrl: String? = null,
     @Json(name = "qris_string") val qrisString: String? = null,
+    @Json(name = "qr_url") val qrUrl: String? = null,
+    @Json(name = "qr_string") val qrString: String? = null,
     @Json(name = "amount") val amount: Long? = null,
     @Json(name = "total_amount") val totalAmount: Long? = null,
     @Json(name = "va_number") val vaNumber: String? = null,
@@ -65,9 +67,9 @@ object RcbChannels {
         ),
         RcbChannelInfo(
             code = "qris",
-            name = "QRIS Dinamis Multi-Bank",
+            name = "QRIS Bisnis Bank Mandiri (Multi-Bank)",
             category = "QRIS & E-Wallet",
-            description = "Scan instan via BCA, Mandiri, BRI, BNI, GoPay, OVO, Dana, ShopeePay",
+            description = "QRIS Mandiri T+0 Instan dengan kode unik, mendukung BCA, Mandiri, BRI, BNI, GoPay, OVO, Dana, ShopeePay",
             iconType = "QRIS"
         ),
 
@@ -256,8 +258,8 @@ interface RcbApiService {
 
 object RcbApiClient {
     const val BASE_URL = "https://api.ragaciptabersama.web.id/api/"
-    // Live API Key provided by user for PT. Raga Cipta Bersama
-    const val DEFAULT_API_KEY = "rcb_live_usr_ffbffccebf4e"
+    // Live API Key provided by user
+    const val DEFAULT_API_KEY = "rcb_live_fxcxw5v0ea9"
 
     private val okHttpClient: OkHttpClient by lazy {
         val logging = HttpLoggingInterceptor().apply {

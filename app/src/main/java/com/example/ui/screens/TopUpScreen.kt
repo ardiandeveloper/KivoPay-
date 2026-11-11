@@ -123,7 +123,7 @@ fun TopUpScreen(
                             color = TextPrimaryDark
                         )
                         Text(
-                            text = "Terintegrasi Resmi RCB Pay Gateway",
+                            text = "Terintegrasi Sistem Pembayaran Digital Instan",
                             fontSize = 11.sp,
                             color = PrimaryBlue
                         )
@@ -167,7 +167,7 @@ fun TopUpScreen(
                         color = EmeraldSuccess.copy(alpha = 0.12f)
                     ) {
                         Text(
-                            text = "RCB Real-Time",
+                            text = "Verifikasi Instan",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = EmeraldSuccess,
@@ -231,15 +231,15 @@ fun TopUpScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // PAYMENT CHANNELS SELECTOR (All 14 RCB Official Channels)
+            // PAYMENT CHANNELS SELECTOR
             Text(
-                text = "Pilih Metode Pembayaran RCB Pay",
+                text = "Pilih Metode Pembayaran Top Up",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimaryDark
             )
             Text(
-                text = "Pilih saluran gateway resmi untuk menerbitkan invoice custom KivoPay",
+                text = "Pilih saluran pembayaran resmi untuk menerbitkan invoice KivoPay",
                 fontSize = 11.sp,
                 color = TextSecondaryMuted,
                 modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
@@ -448,12 +448,12 @@ fun TopUpScreen(
                 if (isSubmitting) {
                     CircularProgressIndicator(color = CleanWhite, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Menerbitkan Invoice RCB...", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = CleanWhite)
+                    Text("Menerbitkan Invoice Pembayaran...", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = CleanWhite)
                 } else {
                     Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = CleanWhite, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Buat Invoice Pembayaran RCB",
+                        text = "Buat Invoice Pembayaran",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = CleanWhite

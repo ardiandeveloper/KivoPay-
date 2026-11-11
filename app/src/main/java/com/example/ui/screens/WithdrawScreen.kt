@@ -141,7 +141,7 @@ fun WithdrawScreen(
                             color = TextPrimaryDark
                         )
                         Text(
-                            text = if (isOvo) "Sesama OVO: Bebas Biaya Admin" else "Pencairan Real-Time via RCB Payout",
+                            text = if (isOvo) "Sesama OVO: Bebas Biaya Admin" else "Pencairan Real-Time KivoPay Payout",
                             fontSize = 11.sp,
                             color = if (isOvo) EmeraldSuccess else PrimaryBlue
                         )
@@ -239,7 +239,7 @@ fun WithdrawScreen(
                                 color = if (isOvo) EmeraldSuccess.copy(alpha = 0.15f) else PrimaryBlue.copy(alpha = 0.12f)
                             ) {
                                 Text(
-                                    text = if (isOvo) "PROMO OVO" else "RCB Pay",
+                                    text = if (isOvo) "PROMO OVO" else "KivoPay Instan",
                                     fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isOvo) EmeraldSuccess else PrimaryBlue,
@@ -248,7 +248,7 @@ fun WithdrawScreen(
                             }
                         }
                         Text(
-                            text = if (isOvo) "Penarikan ke sesama OVO 100% bebas biaya admin. Saldo langsung cair real-time." else "Penarikan diproses real-time langsung ke tujuan melalui gateway kliring RCB Pay.",
+                            text = if (isOvo) "Penarikan ke sesama OVO 100% bebas biaya admin. Saldo langsung cair real-time." else "Penarikan diproses real-time langsung ke rekening tujuan melalui kliring jaringan perbankan.",
                             fontSize = 11.sp,
                             color = TextSecondaryMuted,
                             lineHeight = 15.sp,

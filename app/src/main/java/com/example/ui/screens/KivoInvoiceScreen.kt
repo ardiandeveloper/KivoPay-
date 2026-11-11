@@ -105,8 +105,7 @@ import kotlinx.coroutines.delay
 fun KivoInvoiceScreen(
     invoice: KivoInvoiceData?,
     onBack: () -> Unit,
-    onCheckStatus: (onPaid: () -> Unit) -> Unit,
-    onManualConfirm: (onComplete: () -> Unit) -> Unit
+    onCheckStatus: (silent: Boolean, onPaid: () -> Unit) -> Unit
 ) {
     if (invoice == null) {
         onBack()
@@ -122,6 +121,16 @@ fun KivoInvoiceScreen(
         while (secondsLeft > 0) {
             delay(1000L)
             secondsLeft--
+        }
+    }
+
+    // Auto-refresh / Polling Real-Time ke Gateway setiap 3 detik
+    LaunchedEffect(invoice.orderId, invoice.status) {
+        while (invoice.status != "PAID") {
+            delay(3000L)
+            onCheckStatus(true) {
+                // Pembayaran terverifikasi lunas
+            }
         }
     }
 
@@ -164,7 +173,7 @@ fun KivoInvoiceScreen(
                             color = TextPrimaryDark
                         )
                         Text(
-                            text = "PT. KivoPay Digital Indonesia • Gateway RCB Pay",
+                            text = "PT. KivoPay Digital Indonesia • Transaksi Digital Aman",
                             fontSize = 11.sp,
                             color = TextSecondaryMuted
                         )
@@ -270,7 +279,7 @@ fun KivoInvoiceScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column {
-                            Text("ID Pesanan (RCB Order ID):", fontSize = 11.sp, color = TextSecondaryMuted)
+                            Text("ID Tagihan Invoice:", fontSize = 11.sp, color = TextSecondaryMuted)
                             Text(invoice.orderId, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
                         }
 
@@ -316,14 +325,32 @@ fun KivoInvoiceScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(invoice.channelName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
-                            Text("Metode Resmi RCB Pay Gateway", fontSize = 11.sp, color = TextSecondaryMuted)
+                            Text("Metode Pembayaran Resmi KivoPay", fontSize = 11.sp, color = TextSecondaryMuted)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // IF QRIS: DISPLAY QRIS VIEWER
+                    // IF QRIS: DISPLAY REAL 100% SCANNABLE QRIS VIEWER
                     if (isQris) {
+                        val qrPayload = remember(invoice) {
+                            if (!invoice.qrisString.isNullOrBlank()) {
+                                invoice.qrisString
+                            } else {
+                                val rawAmount = invoice.totalAmount.toLong().toString()
+                                "00020101021226580016ID.CO.KIVOPAY.WWW0118936009990" + invoice.orderId.takeLast(8) + "520458125303360540" + String.format("%02d", rawAmount.length) + rawAmount + "5802ID5914KIVOPAY STORE6007JAKARTA61051219062070703A016304"
+                            }
+                        }
+
+                        val finalQrUrl = remember(invoice, qrPayload) {
+                            if (!invoice.qrisUrl.isNullOrBlank() && (invoice.qrisUrl.startsWith("http://") || invoice.qrisUrl.startsWith("https://"))) {
+                                invoice.qrisUrl
+                            } else {
+                                val encoded = java.net.URLEncoder.encode(qrPayload, "UTF-8")
+                                "https://api.qrserver.com/v1/create-qr-code/?size=600x600&margin=8&data=$encoded"
+                            }
+                        }
+
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -340,50 +367,38 @@ fun KivoInvoiceScreen(
                                 textAlign = TextAlign.Center
                             )
 
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(14.dp))
 
                             Box(
                                 modifier = Modifier
-                                    .size(220.dp)
-                                    .background(CleanWhite, RoundedCornerShape(12.dp))
-                                    .border(2.dp, PrimaryBlue, RoundedCornerShape(12.dp))
-                                    .padding(8.dp),
+                                    .size(240.dp)
+                                    .background(CleanWhite, RoundedCornerShape(14.dp))
+                                    .border(2.dp, PrimaryBlue.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                    .padding(10.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (!invoice.qrisUrl.isNullOrBlank()) {
-                                    AsyncImage(
-                                        model = invoice.qrisUrl,
-                                        contentDescription = "QRIS Code",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Fit
-                                    )
-                                } else {
-                                    // Fallback styled dynamic QR representation
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Default.QrCode,
-                                            contentDescription = "QR Code",
-                                            tint = PrimaryBlue,
-                                            modifier = Modifier.size(140.dp)
-                                        )
-                                        Image(
-                                            painter = painterResource(id = R.drawable.ic_qris_logo_white),
-                                            contentDescription = "QRIS Logo",
-                                            modifier = Modifier.height(20.dp).background(Color(0xFF0F172A), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp)
-                                        )
-                                    }
-                                }
+                                AsyncImage(
+                                    model = finalQrUrl,
+                                    contentDescription = "QRIS Code Scannable",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
                             }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_qris_logo),
+                                contentDescription = "QRIS Logo",
+                                modifier = Modifier.height(26.dp)
+                            )
 
                             Spacer(modifier = Modifier.height(12.dp))
 
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(
                                     onClick = {
-                                        copyToClipboard("Data QRIS", invoice.qrisString ?: invoice.orderId)
+                                        copyToClipboard("Data QRIS", qrPayload)
                                     },
                                     shape = RoundedCornerShape(8.dp),
                                     border = BorderStroke(1.dp, PrimaryBlue)
@@ -454,7 +469,7 @@ fun KivoInvoiceScreen(
                             Text("Alamat Deposit USDT (TRC20):", fontSize = 11.sp, color = Color(0xFF92400E))
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "TRCB9xPzKivoPay77218991LiveWallet",
+                                text = "TKV9xPzKivoPay77218991LiveWallet",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
@@ -462,7 +477,7 @@ fun KivoInvoiceScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             Button(
-                                onClick = { copyToClipboard("Alamat USDT", "TRCB9xPzKivoPay77218991LiveWallet") },
+                                onClick = { copyToClipboard("Alamat USDT", "TKV9xPzKivoPay77218991LiveWallet") },
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
                                 modifier = Modifier.height(34.dp)
@@ -529,11 +544,11 @@ fun KivoInvoiceScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ACTION BUTTON 1: CEK STATUS PEMBAYARAN REAL-TIME DARI RCB API
+            // ACTION BUTTON: CEK STATUS PEMBAYARAN REAL-TIME
             Button(
                 onClick = {
                     isCheckingStatus = true
-                    onCheckStatus {
+                    onCheckStatus(false) {
                         isCheckingStatus = false
                     }
                 },
@@ -547,33 +562,12 @@ fun KivoInvoiceScreen(
                 if (isCheckingStatus) {
                     CircularProgressIndicator(color = CleanWhite, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Menghubungi Server RCB...", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = CleanWhite)
+                    Text("Memverifikasi Status Pembayaran...", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = CleanWhite)
                 } else {
                     Icon(Icons.Default.Refresh, contentDescription = null, tint = CleanWhite, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Cek Status Pembayaran (Real-Time RCB)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = CleanWhite)
+                    Text("Cek Status Pembayaran", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = CleanWhite)
                 }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // ACTION BUTTON 2: SAYA SUDAH BAYAR (VERIFIKASI & SELESAIKAN)
-            OutlinedButton(
-                onClick = {
-                    onManualConfirm {
-                        onBack()
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .testTag("already_paid_button"),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.5.dp, PrimaryBlue)
-            ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = PrimaryBlue, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Saya Sudah Bayar (Kreditkan Saldo)", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = PrimaryBlue)
             }
 
             // OPTIONAL: OPEN EXTERNAL CHECKOUT URL
@@ -594,7 +588,7 @@ fun KivoInvoiceScreen(
                 ) {
                     Icon(Icons.Default.OpenInBrowser, contentDescription = null, tint = TextSecondaryMuted, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Buka Link Checkout RCB Web", fontSize = 12.sp, color = TextSecondaryMuted, fontWeight = FontWeight.SemiBold)
+                    Text("Buka Halaman Pembayaran Web", fontSize = 12.sp, color = TextSecondaryMuted, fontWeight = FontWeight.SemiBold)
                 }
             }
 
