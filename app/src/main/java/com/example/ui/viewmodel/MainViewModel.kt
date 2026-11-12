@@ -40,7 +40,9 @@ enum class AppScreen {
     KIVOPLUS_UPGRADE,
     ADMIN_DASHBOARD,
     RECEIPT_DETAIL,
-    TOPUP_INVOICE
+    TOPUP_INVOICE,
+    ALL_SERVICES,
+    LIVE_CHAT
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {

@@ -5,19 +5,41 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.ui.theme.AmberWarning
+import com.example.ui.theme.CleanWhite
+import com.example.ui.theme.PrimaryBlue
+import com.example.ui.theme.TextPrimaryDark
+import com.example.ui.theme.TextSecondaryMuted
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.components.KivoHeader
@@ -27,8 +49,10 @@ import com.example.ui.screens.AktivitasScreen
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.ChangeBankAccountScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.AllServicesScreen
 import com.example.ui.screens.KivoInvoiceScreen
 import com.example.ui.screens.KivoPlusScreen
+import com.example.ui.screens.LiveChatScreen
 import com.example.ui.screens.NoInternetScreen
 import com.example.ui.screens.NotifikasiScreen
 import com.example.ui.screens.PembayaranScreen
@@ -141,6 +165,8 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
         }
 
         else -> {
+            var showQrisMaintenanceDialog by remember { mutableStateOf(false) }
+
             Scaffold(
                 snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                 topBar = {
@@ -152,6 +178,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                                 viewModel.setActiveTab(3)
                                 viewModel.markNotificationsAsRead()
                             },
+                            onLiveChatClick = { viewModel.navigateTo(AppScreen.LIVE_CHAT) },
                             onProfileClick = { viewModel.setActiveTab(4) }
                         )
                     }
@@ -165,7 +192,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                                 viewModel.setActiveTab(tab)
                                 if (tab == 3) viewModel.markNotificationsAsRead()
                             },
-                            onPayFabClick = { viewModel.navigateTo(AppScreen.QRIS_SCANNER) }
+                            onPayFabClick = { showQrisMaintenanceDialog = true }
                         )
                     }
                 }
@@ -198,8 +225,9 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                                         selectedPaymentCategory = cat
                                         viewModel.navigateTo(AppScreen.PAYMENT)
                                     },
-                                    onNavigateQris = { viewModel.navigateTo(AppScreen.QRIS_SCANNER) },
+                                    onNavigateQris = { showQrisMaintenanceDialog = true },
                                     onNavigateKivoPlus = { viewModel.navigateTo(AppScreen.KIVOPLUS_UPGRADE) },
+                                    onNavigateAllServices = { viewModel.navigateTo(AppScreen.ALL_SERVICES) },
                                     onNavigateSettings = { viewModel.setActiveTab(4) },
                                     onSelectTransaction = { tx -> viewModel.viewReceipt(tx) },
                                     onShowToast = { msg -> viewModel.showToast(msg) }
@@ -347,7 +375,73 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                             onShowToast = { msg -> viewModel.showToast(msg) }
                         )
 
+                        AppScreen.ALL_SERVICES -> AllServicesScreen(
+                            onBack = { viewModel.navigateTo(AppScreen.MAIN) },
+                            onNavigateTransfer = { viewModel.navigateTo(AppScreen.TRANSFER) },
+                            onNavigateWithdraw = { viewModel.navigateTo(AppScreen.WITHDRAW) },
+                            onNavigateTopUp = { viewModel.navigateTo(AppScreen.TOPUP) },
+                            onNavigatePaymentWithCategory = { cat ->
+                                selectedPaymentCategory = cat
+                                viewModel.navigateTo(AppScreen.PAYMENT)
+                            }
+                        )
+
+                        AppScreen.LIVE_CHAT -> LiveChatScreen(
+                            userFullName = currentUser?.fullName ?: "Pengguna KivoPay",
+                            onBack = { viewModel.navigateTo(AppScreen.MAIN) }
+                        )
+
                         else -> {}
+                    }
+
+                    if (showQrisMaintenanceDialog) {
+                        androidx.compose.material3.AlertDialog(
+                            onDismissRequest = { showQrisMaintenanceDialog = false },
+                            icon = {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .background(com.example.ui.theme.AmberWarning.copy(alpha = 0.15f), androidx.compose.foundation.shape.CircleShape),
+                                    contentAlignment = androidx.compose.ui.Alignment.Center
+                                ) {
+                                    androidx.compose.material3.Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Default.Warning,
+                                        contentDescription = "Pemeliharaan",
+                                        tint = com.example.ui.theme.AmberWarning,
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+                            },
+                            title = {
+                                androidx.compose.material3.Text(
+                                    text = "Layanan QRIS Pay Sedang Pemeliharaan",
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                    fontSize = 16.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    color = com.example.ui.theme.TextPrimaryDark
+                                )
+                            },
+                            text = {
+                                androidx.compose.material3.Text(
+                                    text = "Mohon maaf atas ketidaknyamanannya. Fitur Pembayaran QRIS Merchant sedang dalam pemeliharaan infrastruktur sistem berkala agar transaksi Anda semakin aman dan instan.\n\nUntuk saat ini, Anda dapat menggunakan layanan Top Up QRIS, Transfer Bank, atau Tarik Dana.",
+                                    fontSize = 12.sp,
+                                    color = com.example.ui.theme.TextSecondaryMuted,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            },
+                            confirmButton = {
+                                androidx.compose.material3.Button(
+                                    onClick = { showQrisMaintenanceDialog = false },
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.PrimaryBlue),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    androidx.compose.material3.Text("Mengerti & Kembali", color = com.example.ui.theme.CleanWhite, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                                }
+                            },
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp),
+                            containerColor = com.example.ui.theme.CleanWhite
+                        )
                     }
                 }
             }

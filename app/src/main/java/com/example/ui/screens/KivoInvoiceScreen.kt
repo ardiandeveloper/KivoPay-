@@ -570,27 +570,7 @@ fun KivoInvoiceScreen(
                 }
             }
 
-            // OPTIONAL: OPEN EXTERNAL CHECKOUT URL
-            if (!invoice.paymentUrl.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = {
-                        try {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(invoice.paymentUrl))
-                            context.startActivity(intent)
-                        } catch (_: Exception) {}
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(46.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, CardBorderColor)
-                ) {
-                    Icon(Icons.Default.OpenInBrowser, contentDescription = null, tint = TextSecondaryMuted, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Buka Halaman Pembayaran Web", fontSize = 12.sp, color = TextSecondaryMuted, fontWeight = FontWeight.SemiBold)
-                }
-            }
+
 
             Spacer(modifier = Modifier.height(36.dp))
         }

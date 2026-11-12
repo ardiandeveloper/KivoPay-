@@ -29,6 +29,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AddCard
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -126,6 +127,7 @@ fun HomeScreen(
     onNavigatePaymentWithCategory: (String) -> Unit = {},
     onNavigateQris: () -> Unit,
     onNavigateKivoPlus: () -> Unit = {},
+    onNavigateAllServices: () -> Unit = {},
     onNavigateSettings: () -> Unit,
     onSelectTransaction: (TransactionEntity) -> Unit,
     onShowToast: (String) -> Unit
@@ -248,7 +250,7 @@ fun HomeScreen(
                     onPln = { onNavigatePaymentWithCategory("Listrik PLN") },
                     onPulsa = { onNavigatePaymentWithCategory("Pulsa & Data") },
                     onPdam = { onNavigatePaymentWithCategory("PDAM Air") },
-                    onAllServices = { showAllServicesSheet = true }
+                    onAllServices = onNavigateAllServices
                 )
             }
         }
@@ -740,7 +742,7 @@ fun ServiceMenuGrid(
         ServiceMenuItem("Top Up", Icons.Default.AddCard, PrimaryBlue, onTopUp),
         ServiceMenuItem("Transfer", Icons.Default.Send, PrimaryBlueLight, onTransfer),
         ServiceMenuItem("Tarik Dana", Icons.Default.Payments, Color(0xFF0284C7), onWithdraw),
-        ServiceMenuItem("QRIS Pay", Icons.Default.QrCodeScanner, PrimaryBlueDark, onQris)
+        ServiceMenuItem("e-Wallet", Icons.Default.AccountBalanceWallet, PrimaryBlueDark, { onPulsa() })
     )
 
     val row2 = listOf(

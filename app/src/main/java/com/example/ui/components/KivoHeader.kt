@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.HeadsetMic
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.Icon
@@ -39,6 +40,7 @@ fun KivoHeader(
     userName: String,
     unreadNotificationsCount: Int,
     onNotificationClick: () -> Unit,
+    onLiveChatClick: () -> Unit = {},
     onProfileClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -100,6 +102,16 @@ fun KivoHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            // LiveChat CS Button
+            IconButton(onClick = onLiveChatClick) {
+                Icon(
+                    imageVector = Icons.Default.HeadsetMic,
+                    contentDescription = "LiveChat CS",
+                    tint = PrimaryBlue,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+
             // Notifications Icon with Red Dot Badge
             Box {
                 IconButton(onClick = onNotificationClick) {

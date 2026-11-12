@@ -251,7 +251,7 @@ fun AuthScreen(
                             value = loginEmail,
                             onValueChange = { loginEmail = it },
                             label = { Text("Alamat Email") },
-                            placeholder = { Text("nama@email.com atau admin@kivopay.id") },
+                            placeholder = { Text("contoh: namakamu@gmail.com") },
                             leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email") },
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -386,7 +386,7 @@ fun AuthScreen(
                             value = regEmail,
                             onValueChange = { regEmail = it },
                             label = { Text("Alamat Email") },
-                            placeholder = { Text("contoh@email.com") },
+                            placeholder = { Text("contoh: namakamu@gmail.com") },
                             leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email") },
                             modifier = Modifier
                                 .fillMaxWidth()

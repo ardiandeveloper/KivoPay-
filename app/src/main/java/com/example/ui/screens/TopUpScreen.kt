@@ -70,7 +70,9 @@ import com.example.data.remote.RcbChannelInfo
 import com.example.data.remote.RcbChannels
 import com.example.ui.components.kivoBigAmountTextStyle
 import com.example.ui.components.kivoTextFieldColors
+import com.example.ui.theme.AmberWarning
 import com.example.ui.theme.CardBorderColor
+import androidx.compose.ui.draw.alpha
 import com.example.ui.theme.CleanWhite
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.NavyBluePrimary
@@ -90,20 +92,24 @@ fun TopUpScreen(
     onCreateInvoice: (amount: Double, channelCode: String, channelName: String) -> Unit
 ) {
     var amountInput by remember { mutableStateOf("100000") }
-    var selectedChannel by remember { mutableStateOf(RcbChannels.allChannels.first()) }
+    val availableChannels = remember {
+        RcbChannels.allChannels.filter {
+            it.code != "usdt" && it.code != "pulsa" && it.category != "Kripto & Pulsa"
+        }
+    }
+    var selectedChannel by remember { mutableStateOf(availableChannels.first { it.code.contains("qris") }) }
     var selectedCategoryIndex by remember { mutableStateOf(0) }
     var isSubmitting by remember { mutableStateOf(false) }
 
     val presetNominals = listOf(20000.0, 50000.0, 100000.0, 200000.0, 500000.0, 1000000.0)
 
-    val categoryTabs = listOf("Semua (14)", "QRIS & E-Wallet", "Virtual Account", "Kripto & Pulsa")
+    val categoryTabs = listOf("Semua", "QRIS (Aktif Instan)", "Virtual Account (Maintenance)")
 
-    val filteredChannels = remember(selectedCategoryIndex) {
+    val filteredChannels = remember(selectedCategoryIndex, availableChannels) {
         when (selectedCategoryIndex) {
-            1 -> RcbChannels.allChannels.filter { it.category == "QRIS & E-Wallet" }
-            2 -> RcbChannels.allChannels.filter { it.category == "Virtual Account Bank" }
-            3 -> RcbChannels.allChannels.filter { it.category == "Kripto & Pulsa" }
-            else -> RcbChannels.allChannels
+            1 -> availableChannels.filter { it.code.contains("qris") }
+            2 -> availableChannels.filter { !it.code.contains("qris") }
+            else -> availableChannels
         }
     }
 
@@ -275,12 +281,21 @@ fun TopUpScreen(
 
             // Channels List
             filteredChannels.forEach { channel ->
-                val isSelected = selectedChannel.code == channel.code
+                val isQrisChannel = channel.code.contains("qris")
+                val isSelected = isQrisChannel && selectedChannel.code == channel.code
+                
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
-                        .clickable { selectedChannel = channel }
+                        .alpha(if (isQrisChannel) 1f else 0.55f)
+                        .then(
+                            if (isQrisChannel) {
+                                Modifier.clickable { selectedChannel = channel }
+                            } else {
+                                Modifier
+                            }
+                        )
                         .testTag("channel_${channel.code}"),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
@@ -313,14 +328,12 @@ fun TopUpScreen(
                             ) {
                                 val icon = when (channel.iconType) {
                                     "QRIS" -> Icons.Default.QrCodeScanner
-                                    "VA" -> Icons.Default.AccountBalance
-                                    "CRYPTO" -> Icons.Default.CurrencyBitcoin
-                                    else -> Icons.Default.PhoneAndroid
+                                    else -> Icons.Default.AccountBalance
                                 }
                                 Icon(
                                     imageVector = icon,
                                     contentDescription = channel.name,
-                                    tint = PrimaryBlue,
+                                    tint = if (isQrisChannel) PrimaryBlue else Color(0xFF64748B),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -333,16 +346,31 @@ fun TopUpScreen(
                                         text = channel.name,
                                         fontSize = 13.sp,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
-                                        color = TextPrimaryDark
+                                        color = if (isQrisChannel) TextPrimaryDark else Color(0xFF64748B)
                                     )
-                                    if (channel.isRecommended) {
+                                    if (!isQrisChannel) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = AmberWarning.copy(alpha = 0.15f),
+                                            border = BorderStroke(0.5.dp, AmberWarning)
+                                        ) {
+                                            Text(
+                                                text = "MAINTENANCE",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = AmberWarning,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else if (channel.isRecommended) {
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Surface(
                                             shape = RoundedCornerShape(4.dp),
                                             color = EmeraldSuccess.copy(alpha = 0.15f)
                                         ) {
                                             Text(
-                                                text = "REKOMENDASI",
+                                                text = "AKTIF INSTAN",
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = EmeraldSuccess,
@@ -353,9 +381,9 @@ fun TopUpScreen(
                                 }
 
                                 Text(
-                                    text = channel.description,
+                                    text = if (!isQrisChannel) "Saluran ini sedang dalam pemeliharaan sistem berkala. Silakan gunakan metode QRIS." else channel.description,
                                     fontSize = 11.sp,
-                                    color = TextSecondaryMuted,
+                                    color = if (isQrisChannel) TextSecondaryMuted else Color(0xFF94A3B8),
                                     lineHeight = 14.sp,
                                     modifier = Modifier.padding(top = 2.dp)
                                 )
@@ -364,8 +392,12 @@ fun TopUpScreen(
 
                         RadioButton(
                             selected = isSelected,
-                            onClick = { selectedChannel = channel },
-                            colors = RadioButtonDefaults.colors(selectedColor = PrimaryBlue)
+                            enabled = isQrisChannel,
+                            onClick = if (isQrisChannel) { { selectedChannel = channel } } else null,
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = PrimaryBlue,
+                                disabledUnselectedColor = Color(0xFFCBD5E1)
+                            )
                         )
                     }
                 }

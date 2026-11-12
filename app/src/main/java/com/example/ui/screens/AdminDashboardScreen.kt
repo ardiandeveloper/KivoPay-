@@ -1004,7 +1004,7 @@ fun AdminDashboardScreen(
                     ) {
                         Text("Pengaturan Biaya Penarikan (Withdraw Fee)", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimaryDark)
                         Text(
-                            text = "Konfigurasi biaya layanan flat per penarikan dana bank (Default Rp 3.000). Selisih biaya ini menjadi keuntungan KivoPay.",
+                            text = "Konfigurasi biaya administrasi per penarikan dana bank (Default Rp 3.000). Selisih biaya ini menjadi keuntungan KivoPay.",
                             fontSize = 12.sp,
                             color = TextSecondaryMuted,
                             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)

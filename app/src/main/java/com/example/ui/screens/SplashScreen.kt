@@ -72,7 +72,7 @@ fun SplashScreen() {
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "Modern Digital Banking & Payment Platform",
+                text = "Platform Payment Gateway & Dompet Digital",
                 fontSize = 13.sp,
                 color = PrimaryBlue,
                 fontWeight = FontWeight.SemiBold
@@ -132,7 +132,7 @@ fun SplashScreen() {
                 color = TextSecondaryMuted
             )
             Text(
-                text = "PT Kivo Finansial Indonesia • Berizin & Diawasi Bank Sentral RI",
+                text = "PT. KivoPay Digital Indonesia • Payment Gateway Platform Terpercaya",
                 fontSize = 10.sp,
                 color = TextSecondaryMuted.copy(alpha = 0.8f),
                 modifier = Modifier.padding(top = 2.dp)
