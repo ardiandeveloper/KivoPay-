@@ -106,6 +106,26 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
 
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Android Runtime Permission Launcher for Camera, Media/Storage, Notifications
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // Handle result gracefully
+    }
+
+    LaunchedEffect(Unit) {
+        val permissionsToRequest = mutableListOf(
+            android.Manifest.permission.CAMERA
+        )
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            permissionsToRequest.add(android.Manifest.permission.READ_MEDIA_IMAGES)
+            permissionsToRequest.add(android.Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            permissionsToRequest.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        permissionLauncher.launch(permissionsToRequest.toTypedArray())
+    }
+
     // Observe Toast Messages
     LaunchedEffect(Unit) {
         viewModel.toastEvent.collect { message ->
@@ -286,6 +306,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
 
                         AppScreen.TRANSFER -> TransferScreen(
                             userAvailableBalance = currentUser?.saldoAvailable ?: 0.0,
+                            allUsers = allUsers,
                             onBack = { viewModel.navigateTo(AppScreen.MAIN) },
                             onExecuteTransfer = { destination, bankName, amount, notes, pin ->
                                 viewModel.transfer(destination, bankName, amount, notes, pin) {}
@@ -316,6 +337,7 @@ fun KivoPayApp(viewModel: MainViewModel = viewModel()) {
                         AppScreen.PAYMENT -> PembayaranScreen(
                             userAvailableBalance = currentUser?.saldoAvailable ?: 0.0,
                             initialCategoryName = selectedPaymentCategory,
+                            userFullName = currentUser?.fullName ?: "",
                             onBack = { viewModel.navigateTo(AppScreen.MAIN) },
                             onExecutePayment = { category, customerNo, amount, fee, pin ->
                                 viewModel.payBill(category, customerNo, amount, fee, pin) {}

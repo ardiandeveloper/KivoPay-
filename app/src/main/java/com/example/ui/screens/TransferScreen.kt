@@ -22,9 +22,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Search
+import com.example.data.model.UserEntity
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -75,12 +77,12 @@ import com.example.ui.theme.TextSecondaryMuted
 @Composable
 fun TransferScreen(
     userAvailableBalance: Double,
+    allUsers: List<UserEntity> = emptyList(),
     onBack: () -> Unit,
     onExecuteTransfer: (destination: String, bankName: String, amount: Double, notes: String, pin: String) -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) } // 0: Sesama KivoPay (ID HP), 1: Bank Lain
     var destinationInput by remember { mutableStateOf("081298765432") }
-    var recipientNameLookup by remember { mutableStateOf("Siti Rahma (Pengguna KivoPay)") }
     var selectedBank by remember { mutableStateOf("Bank Central Asia (BCA)") }
     var bankSearchQuery by remember { mutableStateOf("") }
     var bankExpanded by remember { mutableStateOf(false) }
@@ -93,6 +95,28 @@ fun TransferScreen(
             IndonesianBanks.allBanks
         } else {
             IndonesianBanks.allBanks.filter { it.contains(bankSearchQuery, ignoreCase = true) }
+        }
+    }
+
+    val foundUser = remember(destinationInput, selectedTab, allUsers) {
+        if (selectedTab == 0 && destinationInput.trim().length >= 8) {
+            allUsers.find { it.phoneNumber.trim() == destinationInput.trim() || it.accountId.trim() == destinationInput.trim() }
+        } else null
+    }
+
+    val isRecipientVerified = remember(destinationInput, selectedTab, foundUser) {
+        if (selectedTab == 0) {
+            foundUser != null
+        } else {
+            destinationInput.trim().length >= 6
+        }
+    }
+
+    val verifiedRecipientName = remember(destinationInput, selectedTab, foundUser) {
+        if (selectedTab == 0) {
+            foundUser?.let { "${it.fullName} (Pengguna KivoPay)" } ?: ""
+        } else {
+            "PT Mitra Rekening Penerima"
         }
     }
 
@@ -141,7 +165,6 @@ fun TransferScreen(
                     onClick = {
                         selectedTab = 0
                         destinationInput = "081298765432"
-                        recipientNameLookup = "Siti Rahma (Pengguna KivoPay)"
                     },
                     text = { Text("Sesama KivoPay (Gratis)", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
                 )
@@ -150,7 +173,6 @@ fun TransferScreen(
                     onClick = {
                         selectedTab = 1
                         destinationInput = "5271829102"
-                        recipientNameLookup = "PT Mitra Rekening Penerima"
                     },
                     text = { Text("Ke Bank Lain", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
                 )
@@ -249,29 +271,55 @@ fun TransferScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
 
-            // Real Lookup Badge
-            if (destinationInput.length >= 8) {
+            // Real Database Lookup Badge
+            if (destinationInput.trim().length >= 6) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(EmeraldSuccess.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Verified",
-                        tint = EmeraldSuccess,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Penerima Terverifikasi: $recipientNameLookup",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = EmeraldSuccess
-                    )
+                if (isRecipientVerified) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(EmeraldSuccess.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Verified",
+                            tint = EmeraldSuccess,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Penerima Terverifikasi: $verifiedRecipientName",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = EmeraldSuccess
+                        )
+                    }
+                } else if (selectedTab == 0 && destinationInput.trim().length >= 8) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFFEF2F2), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFFEF4444).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Not Registered",
+                            tint = Color(0xFFDC2626),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "ID KivoPay / Nomor HP belum terdaftar di KivoPay. Yuk ajak temanmu daftar KivoPay!",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFDC2626),
+                            lineHeight = 15.sp
+                        )
+                    }
                 }
             }
 
@@ -406,7 +454,7 @@ fun TransferScreen(
 
             Button(
                 onClick = { showPinSheet = true },
-                enabled = amountDouble >= 10000.0 && isBalanceSufficient && destinationInput.length >= 8,
+                enabled = amountDouble >= 10000.0 && isBalanceSufficient && isRecipientVerified,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
@@ -424,7 +472,7 @@ fun TransferScreen(
     if (showPinSheet) {
         PinInputDialog(
             title = "Konfirmasi PIN Keamanan",
-            subtitle = "Transfer Rp ${formatCurrency(amountDouble)} ke $recipientNameLookup",
+            subtitle = "Transfer Rp ${formatCurrency(amountDouble)} ke $verifiedRecipientName",
             onDismiss = { showPinSheet = false },
             onPinSubmitted = { pin ->
                 showPinSheet = false

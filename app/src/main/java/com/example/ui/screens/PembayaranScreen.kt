@@ -71,6 +71,7 @@ data class PayCategory(
 fun PembayaranScreen(
     userAvailableBalance: Double,
     initialCategoryName: String = "Listrik PLN",
+    userFullName: String = "",
     onBack: () -> Unit,
     onExecutePayment: (category: String, customerNo: String, amount: Double, fee: Double, pin: String) -> Unit
 ) {
@@ -185,7 +186,12 @@ fun PembayaranScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.CheckCircle, contentDescription = "Valid", tint = EmeraldSuccess, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Tagihan Ditemukan: ${selectedCat.name} (A.N Alex Wijaya)", fontSize = 12.sp, color = EmeraldSuccess, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Tagihan Ditemukan: ${selectedCat.name} (A.N ${userFullName.ifBlank { "Pelanggan KivoPay" }})",
+                        fontSize = 12.sp,
+                        color = EmeraldSuccess,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
